@@ -31,6 +31,30 @@ export class ContractService {
     return await contract.approve(spender, amountWei);
   }
 
+  async getAllowance(owner: string, spender: string): Promise<string> {
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.rtkToken, RTKT_TOKEN_ABI, this.provider);
+    const allowance = await contract.allowance(owner, spender);
+    return ethers.formatEther(allowance);
+  }
+
+  async getTotalSupply(): Promise<string> {
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.rtkToken, RTKT_TOKEN_ABI, this.provider);
+    const totalSupply = await contract.totalSupply();
+    return ethers.formatEther(totalSupply);
+  }
+
+  async mintRTK(to: string, amount: string): Promise<ethers.ContractTransactionResponse> {
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.rtkToken, RTKT_TOKEN_ABI, this.signer);
+    const amountWei = ethers.parseEther(amount);
+    return await contract.mint(to, amountWei);
+  }
+
+  async burnRTK(amount: string): Promise<ethers.ContractTransactionResponse> {
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.rtkToken, RTKT_TOKEN_ABI, this.signer);
+    const amountWei = ethers.parseEther(amount);
+    return await contract.burn(amountWei);
+  }
+
   // Reward Manager Methods
   async depositRTK(amount: string): Promise<ethers.ContractTransactionResponse> {
     const contract = new ethers.Contract(CONTRACT_ADDRESSES.rewardManager, REWARD_MANAGER_ABI, this.signer);
@@ -56,6 +80,39 @@ export class ContractService {
     return ethers.formatEther(amount);
   }
 
+  async claimReward(laporanId: number): Promise<ethers.ContractTransactionResponse> {
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.rewardManager, REWARD_MANAGER_ABI, this.signer);
+    return await contract.claimReward(laporanId);
+  }
+
+  async getContributionLevel(laporanId: number): Promise<number> {
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.rewardManager, REWARD_MANAGER_ABI, this.provider);
+    const level = await contract.getContributionLevel(laporanId);
+    return Number(level);
+  }
+
+  async hasValidatorClaimedReward(laporanId: number, validator: string): Promise<boolean> {
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.rewardManager, REWARD_MANAGER_ABI, this.provider);
+    return await contract.hasValidatorClaimedReward(laporanId, validator);
+  }
+
+  async setContributionLevel(laporanId: number, level: number): Promise<ethers.ContractTransactionResponse> {
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.rewardManager, REWARD_MANAGER_ABI, this.signer);
+    return await contract.setContributionLevel(laporanId, level);
+  }
+
+  async getMinStakeAmount(): Promise<string> {
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.rewardManager, REWARD_MANAGER_ABI, this.provider);
+    const amount = await contract.MIN_STAKE_AMOUNT();
+    return ethers.formatEther(amount);
+  }
+
+  async getBaseRewardPerLevel(): Promise<string> {
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.rewardManager, REWARD_MANAGER_ABI, this.provider);
+    const amount = await contract.BASE_REWARD_PER_LEVEL();
+    return ethers.formatEther(amount);
+  }
+
   // Institusi Contract Methods
   async getInstitusiCount(): Promise<number> {
     const contract = new ethers.Contract(CONTRACT_ADDRESSES.institusi, INSTITUSI_ABI, this.provider);
@@ -66,6 +123,11 @@ export class ContractService {
   async getInstitusiData(institusiId: number) {
     const contract = new ethers.Contract(CONTRACT_ADDRESSES.institusi, INSTITUSI_ABI, this.provider);
     return await contract.getInstitusiData(institusiId);
+  }
+
+  async daftarInstitusi(nama: string, treasury: string): Promise<ethers.ContractTransactionResponse> {
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.institusi, INSTITUSI_ABI, this.signer);
+    return await contract.daftarInstitusi(nama, treasury);
   }
 
   async isValidator(institusiId: number, address: string): Promise<boolean> {
@@ -88,10 +150,36 @@ export class ContractService {
     return await contract.tambahPelapor(institusiId, pelaporAddress);
   }
 
+  async getValidatorList(institusiId: number): Promise<string[]> {
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.institusi, INSTITUSI_ABI, this.provider);
+    return await contract.getValidatorList(institusiId);
+  }
+
+  async getValidatorReputation(validator: string): Promise<number> {
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.institusi, INSTITUSI_ABI, this.provider);
+    const reputation = await contract.validatorReputation(validator);
+    return Number(reputation);
+  }
+
+  async removeValidator(institusiId: number, validatorAddress: string): Promise<ethers.ContractTransactionResponse> {
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.institusi, INSTITUSI_ABI, this.signer);
+    return await contract.removeValidator(institusiId, validatorAddress);
+  }
+
+  async updateReputation(validator: string, score: number): Promise<ethers.ContractTransactionResponse> {
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.institusi, INSTITUSI_ABI, this.signer);
+    return await contract.updateReputation(validator, score);
+  }
+
   // User Contract Methods
   async buatLaporan(institusiId: number, judul: string, deskripsi: string): Promise<ethers.ContractTransactionResponse> {
     const contract = new ethers.Contract(CONTRACT_ADDRESSES.user, USER_ABI, this.signer);
     return await contract.buatLaporan(institusiId, judul, deskripsi);
+  }
+
+  async ajukanBanding(laporanId: number): Promise<ethers.ContractTransactionResponse> {
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.user, USER_ABI, this.signer);
+    return await contract.ajukanBanding(laporanId);
   }
 
   async getLaporanCount(): Promise<number> {
@@ -105,6 +193,33 @@ export class ContractService {
     return await contract.laporan(laporanId);
   }
 
+  async getLaporanDetails(laporanId: number) {
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.user, USER_ABI, this.provider);
+    return await contract.getLaporanDetails(laporanId);
+  }
+
+  async getStakeBandingAmount(): Promise<string> {
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.user, USER_ABI, this.provider);
+    const amount = await contract.STAKE_BANDING_AMOUNT();
+    return ethers.formatEther(amount);
+  }
+
+  async isBanding(laporanId: number): Promise<boolean> {
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.user, USER_ABI, this.provider);
+    return await contract.isBanding(laporanId);
+  }
+
+  async finalisasiBanding(laporanId: number, userMenang: boolean): Promise<ethers.ContractTransactionResponse> {
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.user, USER_ABI, this.signer);
+    return await contract.finalisasiBanding(laporanId, userMenang);
+  }
+
+  async getActiveAssignmentsCount(validator: string): Promise<number> {
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.user, USER_ABI, this.provider);
+    const count = await contract.activeAssignmentsCount(validator);
+    return Number(count);
+  }
+
   // Validator Contract Methods
   async validasiLaporan(laporanId: number, isValid: boolean, deskripsi: string): Promise<ethers.ContractTransactionResponse> {
     const contract = new ethers.Contract(CONTRACT_ADDRESSES.validator, VALIDATOR_ABI, this.signer);
@@ -114,5 +229,41 @@ export class ContractService {
   async resignFromInstitusi(institusiId: number): Promise<ethers.ContractTransactionResponse> {
     const contract = new ethers.Contract(CONTRACT_ADDRESSES.validator, VALIDATOR_ABI, this.signer);
     return await contract.resignFromInstitusi(institusiId);
+  }
+
+  async getHasilValidasi(laporanId: number) {
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.validator, VALIDATOR_ABI, this.provider);
+    return await contract.hasilValidasi(laporanId);
+  }
+
+  async isLaporanSudahDivalidasi(laporanId: number): Promise<boolean> {
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.validator, VALIDATOR_ABI, this.provider);
+    return await contract.laporanSudahDivalidasi(laporanId);
+  }
+
+  async registerValidator(institusiId: number, validator: string): Promise<ethers.ContractTransactionResponse> {
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.validator, VALIDATOR_ABI, this.signer);
+    return await contract.registerValidator(institusiId, validator);
+  }
+
+  // Additional helper methods
+  async setRewardManagerContracts(institusiContract: string, userContract: string): Promise<ethers.ContractTransactionResponse> {
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.rewardManager, REWARD_MANAGER_ABI, this.signer);
+    return await contract.setContracts(institusiContract, userContract);
+  }
+
+  async setInstitusiContracts(validatorContract: string, rewardManagerAddress: string): Promise<ethers.ContractTransactionResponse> {
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.institusi, INSTITUSI_ABI, this.signer);
+    return await contract.setContracts(validatorContract, rewardManagerAddress);
+  }
+
+  async setUserContracts(institusi: string, rewardManager: string, validator: string, rtkToken: string): Promise<ethers.ContractTransactionResponse> {
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.user, USER_ABI, this.signer);
+    return await contract.setContracts(institusi, rewardManager, validator, rtkToken);
+  }
+
+  async setValidatorContracts(user: string, institusi: string, rewardManager: string): Promise<ethers.ContractTransactionResponse> {
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.validator, VALIDATOR_ABI, this.signer);
+    return await contract.setContracts(user, institusi, rewardManager);
   }
 }
