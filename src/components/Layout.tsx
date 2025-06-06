@@ -2,12 +2,22 @@
 import React from 'react';
 import { useWallet } from '../context/WalletContext';
 import WalletConnection from './WalletConnection';
+import { Button } from '@/components/ui/button';
+import { Home } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
+  const { isConnected } = useWallet();
+  
+  const handleGoHome = () => {
+    localStorage.removeItem('selectedInstitution');
+    localStorage.removeItem('selectedRole');
+    window.location.reload();
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
       <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-50">
@@ -21,7 +31,21 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 Decentralized Reporting
               </h1>
             </div>
-            <WalletConnection />
+            
+            <div className="flex items-center space-x-4">
+              {isConnected && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleGoHome}
+                  className="flex items-center gap-2"
+                >
+                  <Home className="w-4 h-4" />
+                  Home
+                </Button>
+              )}
+              <WalletConnection />
+            </div>
           </div>
         </div>
       </header>
