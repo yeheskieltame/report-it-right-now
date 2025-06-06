@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,32 +9,162 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FileText, Plus, History } from 'lucide-react';
+import { useWallet } from '../../context/WalletContext';
+import { useToast } from '@/hooks/use-toast';
 
 const ReporterDashboard: React.FC = () => {
+  const { contractService, address } = useWallet();
+  const { toast } = useToast();
   const [reportForm, setReportForm] = useState({
     institusiId: '',
     judul: '',
     deskripsi: ''
   });
   const [myReports, setMyReports] = useState<any[]>([]);
-  const [institutions, setInstitutions] = useState([
-    { id: 'INST001', name: 'Polda Metro Jaya' },
-    { id: 'INST002', name: 'Kejaksaan Negeri Jakarta Pusat' },
-    { id: 'INST003', name: 'Dinas Lingkungan Hidup DKI' }
-  ]);
+  const [institutions, setInstitutions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmitReport = () => {
-    console.log('Submitting report:', reportForm);
-    // Reset form
-    setReportForm({
-      institusiId: '',
-      judul: '',
-      deskripsi: ''
-    });
+  useEffect(() => {
+    loadInstitutions();
+    loadMyReports();
+  }, [contractService, address]);
+
+  const loadInstitutions = async () => {
+    if (!contractService) return;
+
+    try {
+      const count = await contractService.getInstitusiCount();
+      const institutionsList = [];
+      
+      for (let i = 1; i <= count; i++) {
+        try {
+          const [nama] = await contractService.getInstitusiData(i);
+          institutionsList.push({ id: i.toString(), name: nama });
+        } catch (error) {
+          console.log(`Institution ${i} not found`);
+        }
+      }
+      
+      setInstitutions(institutionsList);
+    } catch (error) {
+      console.error('Error loading institutions:', error);
+    }
   };
 
-  const handleAppeal = (reportId: string) => {
-    console.log('Submitting appeal for report:', reportId);
+  const loadMyReports = async () => {
+    if (!contractService || !address) return;
+
+    try {
+      const totalReports = await contractService.getLaporanCount();
+      const userReports = [];
+
+      for (let i = 1; i <= totalReports; i++) {
+        try {
+          const laporan = await contractService.getLaporan(i);
+          if (laporan.pelapor.toLowerCase() === address.toLowerCase()) {
+            userReports.push({
+              id: laporan.laporanId.toString(),
+              title: laporan.judul,
+              description: laporan.deskripsi,
+              status: laporan.status,
+              institution: `Institution ${laporan.institusiId}`,
+              submittedAt: new Date(Number(laporan.creationTimestamp) * 1000).toLocaleDateString(),
+              validationResult: laporan.status !== 'Menunggu' ? 'Validation completed' : null
+            });
+          }
+        } catch (error) {
+          console.log(`Report ${i} not found or error`);
+        }
+      }
+
+      setMyReports(userReports);
+    } catch (error) {
+      console.error('Error loading reports:', error);
+    }
+  };
+
+  const handleSubmitReport = async () => {
+    if (!contractService || !reportForm.institusiId || !reportForm.judul || !reportForm.deskripsi) {
+      toast({
+        title: "Error",
+        description: "Please fill all fields",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const tx = await contractService.buatLaporan(
+        parseInt(reportForm.institusiId),
+        reportForm.judul,
+        reportForm.deskripsi
+      );
+      
+      toast({
+        title: "Transaction Submitted",
+        description: "Your report is being submitted..."
+      });
+
+      await tx.wait();
+      
+      toast({
+        title: "Success",
+        description: "Report submitted successfully!"
+      });
+
+      setReportForm({
+        institusiId: '',
+        judul: '',
+        deskripsi: ''
+      });
+
+      loadMyReports();
+    } catch (error) {
+      console.error('Error submitting report:', error);
+      toast({
+        title: "Error",
+        description: "Failed to submit report",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAppeal = async (reportId: string) => {
+    if (!contractService) return;
+
+    setLoading(true);
+    try {
+      // First approve tokens for appeal stake
+      await contractService.approveRTK(contractService['CONTRACT_ADDRESSES'].rewardManager, "100");
+      
+      const tx = await contractService.ajukanBanding(parseInt(reportId));
+      
+      toast({
+        title: "Appeal Submitted",
+        description: "Your appeal is being processed..."
+      });
+
+      await tx.wait();
+      
+      toast({
+        title: "Success",
+        description: "Appeal submitted successfully!"
+      });
+
+      loadMyReports();
+    } catch (error) {
+      console.error('Error submitting appeal:', error);
+      toast({
+        title: "Error", 
+        description: "Failed to submit appeal",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -119,9 +249,9 @@ const ReporterDashboard: React.FC = () => {
               <Button 
                 onClick={handleSubmitReport}
                 className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600"
-                disabled={!reportForm.institusiId || !reportForm.judul || !reportForm.deskripsi}
+                disabled={!reportForm.institusiId || !reportForm.judul || !reportForm.deskripsi || loading}
               >
-                Submit Report
+                {loading ? 'Submitting...' : 'Submit Report'}
               </Button>
             </CardContent>
           </Card>
@@ -175,8 +305,9 @@ const ReporterDashboard: React.FC = () => {
                             onClick={() => handleAppeal(report.id)}
                             className="bg-purple-500 hover:bg-purple-600"
                             size="sm"
+                            disabled={loading}
                           >
-                            Submit Appeal
+                            {loading ? 'Processing...' : 'Submit Appeal'}
                           </Button>
                           <p className="text-xs text-muted-foreground mt-2">
                             Appeal requires staking tokens. You will get them back if appeal is successful.

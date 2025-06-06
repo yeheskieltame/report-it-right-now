@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,27 +7,116 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useWallet } from '../../context/WalletContext';
+import { useToast } from '@/hooks/use-toast';
 import { Settings, Coins, Building2 } from 'lucide-react';
+import { CONTRACT_ADDRESSES } from '../../config/contracts';
 
 const SuperAdminDashboard: React.FC = () => {
-  const { contracts, updateContracts } = useWallet();
+  const { contracts, updateContracts, contractService } = useWallet();
+  const { toast } = useToast();
   const [contractInputs, setContractInputs] = useState(contracts);
   const [rewardAmount, setRewardAmount] = useState('');
   const [institutions, setInstitutions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [rtkBalance, setRtkBalance] = useState('0');
+
+  useEffect(() => {
+    loadSystemData();
+  }, [contractService]);
+
+  const loadSystemData = async () => {
+    if (!contractService) return;
+
+    try {
+      // Load institutions
+      const count = await contractService.getInstitusiCount();
+      const institutionsList = [];
+      
+      for (let i = 1; i <= count; i++) {
+        try {
+          const [nama, admin, treasury] = await contractService.getInstitusiData(i);
+          institutionsList.push({
+            institusiId: i.toString(),
+            name: nama,
+            adminAddress: admin,
+            treasury: treasury
+          });
+        } catch (error) {
+          console.log(`Institution ${i} not found`);
+        }
+      }
+      
+      setInstitutions(institutionsList);
+
+      // Load RTK balance if address is available
+      const address = await contractService['signer'].getAddress();
+      const balance = await contractService.getRTKBalance(address);
+      setRtkBalance(balance);
+    } catch (error) {
+      console.error('Error loading system data:', error);
+    }
+  };
 
   const handleContractUpdate = () => {
     updateContracts(contractInputs);
-    // TODO: Call setContracts function on smart contracts
-    console.log('Updating contracts:', contractInputs);
+    toast({
+      title: "Success",
+      description: "Contract addresses updated successfully!"
+    });
   };
 
-  const handleRewardDeposit = () => {
-    // TODO: Call depositRTK function
-    console.log('Depositing reward:', rewardAmount);
-  };
+  const handleRewardDeposit = async () => {
+    if (!contractService || !rewardAmount) {
+      toast({
+        title: "Error",
+        description: "Please enter an amount",
+        variant: "destructive"
+      });
+      return;
+    }
 
-  const contractStatus = (address: string) => {
-    return address ? 'Connected' : 'Not Connected';
+    setLoading(true);
+    try {
+      // First approve tokens
+      const approveTx = await contractService.approveRTK(
+        CONTRACT_ADDRESSES.rewardManager,
+        rewardAmount
+      );
+      
+      toast({
+        title: "Approval Submitted",
+        description: "Approving tokens for deposit..."
+      });
+
+      await approveTx.wait();
+
+      // Then deposit
+      const depositTx = await contractService.depositRTK(rewardAmount);
+      
+      toast({
+        title: "Deposit Submitted",
+        description: "Depositing tokens to reward pool..."
+      });
+
+      await depositTx.wait();
+      
+      toast({
+        title: "Success",
+        description: "Tokens deposited to reward pool successfully!"
+      });
+
+      setRewardAmount('');
+      loadSystemData();
+    } catch (error) {
+      console.error('Error depositing reward:', error);
+      toast({
+        title: "Error",
+        description: "Failed to deposit reward",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getStatusBadge = (address: string) => {
@@ -150,8 +239,8 @@ const SuperAdminDashboard: React.FC = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="bg-gradient-to-r from-green-50 to-blue-50 p-4 rounded-lg">
-                <p className="text-sm text-muted-foreground mb-2">Current Reward Pool Balance</p>
-                <p className="text-2xl font-bold text-green-600">1,000,000 RTK</p>
+                <p className="text-sm text-muted-foreground mb-2">Your RTK Balance</p>
+                <p className="text-2xl font-bold text-green-600">{parseFloat(rtkBalance).toFixed(2)} RTK</p>
               </div>
 
               <div className="space-y-2">
@@ -167,8 +256,9 @@ const SuperAdminDashboard: React.FC = () => {
               <Button 
                 onClick={handleRewardDeposit}
                 className="w-full bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600"
+                disabled={loading || !rewardAmount}
               >
-                Deposit to Reward Pool
+                {loading ? 'Processing...' : 'Deposit to Reward Pool'}
               </Button>
             </CardContent>
           </Card>

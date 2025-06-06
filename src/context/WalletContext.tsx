@@ -2,6 +2,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { ethers } from 'ethers';
 import { WalletState, UserRole, ContractAddresses } from '../types';
+import { CONTRACT_ADDRESSES, TARANIUM_NETWORK } from '../config/contracts';
+import { ContractService } from '../services/ContractService';
 
 interface WalletContextType extends WalletState {
   connectWallet: () => Promise<void>;
@@ -9,6 +11,8 @@ interface WalletContextType extends WalletState {
   contracts: ContractAddresses;
   updateContracts: (contracts: ContractAddresses) => void;
   checkUserRole: (address: string) => Promise<UserRole>;
+  contractService: ContractService | null;
+  switchToTaranium: () => Promise<void>;
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
@@ -25,23 +29,81 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   });
 
   const [contracts, setContracts] = useState<ContractAddresses>({
-    institusi: '',
-    user: '',
-    validator: '',
-    rewardManager: '',
-    rtkToken: '',
+    institusi: CONTRACT_ADDRESSES.institusi,
+    user: CONTRACT_ADDRESSES.user,
+    validator: CONTRACT_ADDRESSES.validator,
+    rewardManager: CONTRACT_ADDRESSES.rewardManager,
+    rtkToken: CONTRACT_ADDRESSES.rtkToken,
   });
 
-  const checkUserRole = async (address: string): Promise<UserRole> => {
-    // Owner check
-    if (address.toLowerCase() === OWNER_ADDRESS.toLowerCase()) {
-      return 'owner';
-    }
+  const [contractService, setContractService] = useState<ContractService | null>(null);
 
-    // TODO: Implement contract calls to check roles
-    // This would involve calling the smart contracts to determine user role
-    // For now, returning 'pelapor' as default
-    return 'pelapor';
+  const switchToTaranium = async () => {
+    if (!window.ethereum) return;
+    
+    try {
+      await window.ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: TARANIUM_NETWORK.chainId }],
+      });
+    } catch (switchError: any) {
+      if (switchError.code === 4902) {
+        try {
+          await window.ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [TARANIUM_NETWORK],
+          });
+        } catch (addError) {
+          console.error('Error adding Taranium network:', addError);
+        }
+      } else {
+        console.error('Error switching to Taranium:', switchError);
+      }
+    }
+  };
+
+  const checkUserRole = async (address: string): Promise<UserRole> => {
+    if (!contractService) return 'pelapor';
+    
+    try {
+      // Check if owner
+      if (address.toLowerCase() === OWNER_ADDRESS.toLowerCase()) {
+        return 'owner';
+      }
+
+      // Check if admin of any institution
+      const institusiCount = await contractService.getInstitusiCount();
+      for (let i = 1; i <= institusiCount; i++) {
+        try {
+          const [, admin] = await contractService.getInstitusiData(i);
+          if (admin.toLowerCase() === address.toLowerCase()) {
+            return 'admin';
+          }
+        } catch (error) {
+          console.log(`Institution ${i} not found or error:`, error);
+          continue;
+        }
+      }
+
+      // Check if validator in any institution
+      for (let i = 1; i <= institusiCount; i++) {
+        try {
+          const isValidator = await contractService.isValidator(i, address);
+          if (isValidator) {
+            return 'validator';
+          }
+        } catch (error) {
+          console.log(`Error checking validator status for institution ${i}:`, error);
+          continue;
+        }
+      }
+
+      // Default to pelapor
+      return 'pelapor';
+    } catch (error) {
+      console.error('Error checking user role:', error);
+      return 'pelapor';
+    }
   };
 
   const connectWallet = async () => {
@@ -49,8 +111,19 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       if (typeof window.ethereum !== 'undefined') {
         const provider = new ethers.BrowserProvider(window.ethereum);
         await window.ethereum.request({ method: 'eth_requestAccounts' });
+        
+        // Check and switch to Taranium network
+        const network = await provider.getNetwork();
+        if (Number(network.chainId) !== 9924) {
+          await switchToTaranium();
+        }
+        
         const signer = await provider.getSigner();
         const address = await signer.getAddress();
+        
+        const contractServiceInstance = new ContractService(provider, signer);
+        setContractService(contractServiceInstance);
+        
         const role = await checkUserRole(address);
 
         setWalletState({
@@ -76,6 +149,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       signer: null,
       provider: null,
     });
+    setContractService(null);
   };
 
   const updateContracts = (newContracts: ContractAddresses) => {
@@ -83,7 +157,6 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   };
 
   useEffect(() => {
-    // Check if wallet is already connected
     const checkConnection = async () => {
       if (typeof window.ethereum !== 'undefined') {
         const provider = new ethers.BrowserProvider(window.ethereum);
@@ -91,6 +164,10 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         if (accounts.length > 0) {
           const signer = await provider.getSigner();
           const address = await signer.getAddress();
+          
+          const contractServiceInstance = new ContractService(provider, signer);
+          setContractService(contractServiceInstance);
+          
           const role = await checkUserRole(address);
           
           setWalletState({
@@ -115,6 +192,8 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       contracts,
       updateContracts,
       checkUserRole,
+      contractService,
+      switchToTaranium,
     }}>
       {children}
     </WalletContext.Provider>
