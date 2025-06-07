@@ -1,4 +1,3 @@
-
 export const TARANIUM_NETWORK = {
   chainId: '0x26C4', // 9924 in hex
   chainName: 'Taranium Testnet',
@@ -221,6 +220,20 @@ export const INSTITUSI_ABI = [
       {"internalType": "address", "name": "treasury", "type": "address"}
     ],
     "name": "daftarInstitusi",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{"internalType": "address", "name": "_validatorContract", "type": "address"}],
+    "name": "setValidatorContract",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{"internalType": "address", "name": "_userContract", "type": "address"}],
+    "name": "setUserContract",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

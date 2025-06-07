@@ -1,4 +1,3 @@
-
 import { ethers } from 'ethers';
 import { 
   CONTRACT_ADDRESSES, 
@@ -131,6 +130,16 @@ export class ContractService {
     return await contract.daftarInstitusi(nama, treasury);
   }
 
+  async setValidatorContract(validatorContractAddress: string): Promise<ethers.ContractTransactionResponse> {
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.institusi, INSTITUSI_ABI, this.signer);
+    return await contract.setValidatorContract(validatorContractAddress);
+  }
+
+  async setUserContract(userContractAddress: string): Promise<ethers.ContractTransactionResponse> {
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.institusi, INSTITUSI_ABI, this.signer);
+    return await contract.setUserContract(userContractAddress);
+  }
+
   async getInstitusiCount(): Promise<number> {
     const contract = new ethers.Contract(CONTRACT_ADDRESSES.institusi, INSTITUSI_ABI, this.provider);
     const count = await contract.institusiCounter();
@@ -257,5 +266,29 @@ export class ContractService {
   async setRewardManagerContracts(institusiContract: string, userContract: string): Promise<ethers.ContractTransactionResponse> {
     const contract = new ethers.Contract(CONTRACT_ADDRESSES.rewardManager, REWARD_MANAGER_ABI, this.signer);
     return await contract.setContracts(institusiContract, userContract);
+  }
+
+  async initializeContracts(): Promise<void> {
+    try {
+      // Set validator contract in institusi contract
+      console.log('Setting validator contract...');
+      const setValidatorTx = await this.setValidatorContract(CONTRACT_ADDRESSES.validator);
+      await setValidatorTx.wait();
+      
+      // Set user contract in institusi contract  
+      console.log('Setting user contract...');
+      const setUserTx = await this.setUserContract(CONTRACT_ADDRESSES.user);
+      await setUserTx.wait();
+      
+      // Set contracts in reward manager
+      console.log('Setting reward manager contracts...');
+      const setRewardTx = await this.setRewardManagerContracts(CONTRACT_ADDRESSES.institusi, CONTRACT_ADDRESSES.user);
+      await setRewardTx.wait();
+      
+      console.log('All contracts initialized successfully');
+    } catch (error) {
+      console.error('Error initializing contracts:', error);
+      throw error;
+    }
   }
 }

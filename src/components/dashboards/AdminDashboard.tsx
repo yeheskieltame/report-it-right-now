@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Building2, Users, FileText, Scale, AlertCircle } from 'lucide-react';
+import { Building2, Users, FileText, Scale, AlertCircle, Settings } from 'lucide-react';
 import { useWallet } from '../../context/WalletContext';
 import { toast } from 'sonner';
 
@@ -43,6 +42,7 @@ const AdminDashboard: React.FC = () => {
   const [institutionData, setInstitutionData] = useState<InstitutionData | null>(null);
   const [loading, setLoading] = useState(false);
   const [contributionLevel, setContributionLevel] = useState<{[key: number]: number}>({});
+  const [contractsInitialized, setContractsInitialized] = useState(false);
 
   // Get current institution ID from localStorage
   const selectedInstitution = localStorage.getItem('selectedInstitution');
@@ -155,6 +155,28 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  const handleInitializeContracts = async () => {
+    if (!contractService) {
+      toast.error('Contract service tidak tersedia');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      toast.info('Menginisialisasi kontrak...');
+      
+      await contractService.initializeContracts();
+      
+      toast.success('Kontrak berhasil diinisialisasi!');
+      setContractsInitialized(true);
+    } catch (error: any) {
+      console.error('Error initializing contracts:', error);
+      toast.error(`Gagal menginisialisasi kontrak: ${error.message || 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleAddValidator = async () => {
     if (!contractService || !newValidatorAddress || institusiId === 0) {
       toast.error('Alamat validator tidak valid');
@@ -175,7 +197,11 @@ const AdminDashboard: React.FC = () => {
       await loadValidators();
     } catch (error: any) {
       console.error('Error adding validator:', error);
-      toast.error(`Gagal menambahkan validator: ${error.message || 'Unknown error'}`);
+      if (error.message.includes('Validator contract belum diatur')) {
+        toast.error('Kontrak validator belum diatur. Silakan inisialisasi kontrak terlebih dahulu.');
+      } else {
+        toast.error(`Gagal menambahkan validator: ${error.message || 'Unknown error'}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -293,11 +319,23 @@ const AdminDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center space-x-3">
-        <Building2 className="w-8 h-8 text-blue-600" />
-        <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-          Institution Admin Dashboard
-        </h2>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-3">
+          <Building2 className="w-8 h-8 text-blue-600" />
+          <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+            Institution Admin Dashboard
+          </h2>
+        </div>
+        {!contractsInitialized && (
+          <Button 
+            onClick={handleInitializeContracts}
+            className="bg-orange-500 hover:bg-orange-600"
+            disabled={loading}
+          >
+            <Settings className="w-4 h-4 mr-2" />
+            Initialize Contracts
+          </Button>
+        )}
       </div>
 
       <Tabs defaultValue="overview" className="w-full">
