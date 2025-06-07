@@ -8,7 +8,7 @@ export const TARANIUM_NETWORK = {
     decimals: 18
   },
   rpcUrls: ['https://testnet-rpc.taranium.com'],
-  blockExplorerUrls: ['https://testnet.taranium.com'] // Assuming block explorer exists
+  blockExplorerUrls: ['https://testnet.taranium.com']
 };
 
 export const CONTRACT_ADDRESSES = {
@@ -44,6 +44,72 @@ export const RTKT_TOKEN_ABI = [
     ],
     "name": "allowance",
     "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "address", "name": "to", "type": "address"},
+      {"internalType": "uint256", "name": "value", "type": "uint256"}
+    ],
+    "name": "transfer",
+    "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "address", "name": "from", "type": "address"},
+      {"internalType": "address", "name": "to", "type": "address"},
+      {"internalType": "uint256", "name": "value", "type": "uint256"}
+    ],
+    "name": "transferFrom",
+    "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "address", "name": "to", "type": "address"},
+      {"internalType": "uint256", "name": "amount", "type": "uint256"}
+    ],
+    "name": "mint",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{"internalType": "uint256", "name": "amount", "type": "uint256"}],
+    "name": "burn",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalSupply",
+    "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "decimals",
+    "outputs": [{"internalType": "uint8", "name": "", "type": "uint8"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "name",
+    "outputs": [{"internalType": "string", "name": "", "type": "string"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "symbol",
+    "outputs": [{"internalType": "string", "name": "", "type": "string"}],
     "stateMutability": "view",
     "type": "function"
   }
@@ -94,10 +160,71 @@ export const REWARD_MANAGER_ABI = [
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
+  },
+  {
+    "inputs": [{"internalType": "uint256", "name": "laporanId", "type": "uint256"}],
+    "name": "getContributionLevel",
+    "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "uint256", "name": "laporanId", "type": "uint256"},
+      {"internalType": "uint256", "name": "level", "type": "uint256"}
+    ],
+    "name": "setContributionLevel",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "uint256", "name": "laporanId", "type": "uint256"},
+      {"internalType": "address", "name": "validator", "type": "address"}
+    ],
+    "name": "hasValidatorClaimedReward",
+    "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "MIN_STAKE_AMOUNT",
+    "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "BASE_REWARD_PER_LEVEL",
+    "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "address", "name": "validator", "type": "address"},
+      {"internalType": "uint256", "name": "amount", "type": "uint256"}
+    ],
+    "name": "slashValidator",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
   }
 ];
 
 export const INSTITUSI_ABI = [
+  {
+    "inputs": [
+      {"internalType": "string", "name": "nama", "type": "string"},
+      {"internalType": "address", "name": "treasury", "type": "address"}
+    ],
+    "name": "daftarInstitusi",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
   {
     "inputs": [{"internalType": "uint256", "name": "institusiId", "type": "uint256"}],
     "name": "getInstitusiData",
@@ -155,6 +282,40 @@ export const INSTITUSI_ABI = [
     "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
     "stateMutability": "view",
     "type": "function"
+  },
+  {
+    "inputs": [{"internalType": "uint256", "name": "institusiId", "type": "uint256"}],
+    "name": "getValidatorList",
+    "outputs": [{"internalType": "address[]", "name": "", "type": "address[]"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "uint256", "name": "institusiId", "type": "uint256"},
+      {"internalType": "address", "name": "_validator", "type": "address"}
+    ],
+    "name": "removeValidator",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{"internalType": "address", "name": "", "type": "address"}],
+    "name": "validatorReputation",
+    "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "address", "name": "validator", "type": "address"},
+      {"internalType": "uint256", "name": "score", "type": "uint256"}
+    ],
+    "name": "updateReputation",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
   }
 ];
 
@@ -200,6 +361,54 @@ export const USER_ABI = [
     "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
     "stateMutability": "view",
     "type": "function"
+  },
+  {
+    "inputs": [{"internalType": "uint256", "name": "laporanId", "type": "uint256"}],
+    "name": "getLaporanDetails",
+    "outputs": [
+      {"internalType": "uint256", "name": "laporanId", "type": "uint256"},
+      {"internalType": "uint256", "name": "institusiId", "type": "uint256"},
+      {"internalType": "address", "name": "pelapor", "type": "address"},
+      {"internalType": "string", "name": "judul", "type": "string"},
+      {"internalType": "string", "name": "deskripsi", "type": "string"},
+      {"internalType": "string", "name": "status", "type": "string"},
+      {"internalType": "address", "name": "validatorAddress", "type": "address"},
+      {"internalType": "address", "name": "assignedValidator", "type": "address"},
+      {"internalType": "uint64", "name": "creationTimestamp", "type": "uint64"}
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "uint256", "name": "laporanId", "type": "uint256"},
+      {"internalType": "bool", "name": "userMenang", "type": "bool"}
+    ],
+    "name": "finalisasiBanding",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+    "name": "isBanding",
+    "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "STAKE_BANDING_AMOUNT",
+    "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{"internalType": "address", "name": "", "type": "address"}],
+    "name": "activeAssignmentsCount",
+    "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+    "stateMutability": "view",
+    "type": "function"
   }
 ];
 
@@ -220,6 +429,25 @@ export const VALIDATOR_ABI = [
     "name": "resignFromInstitusi",
     "outputs": [],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+    "name": "hasilValidasi",
+    "outputs": [
+      {"internalType": "bool", "name": "isValid", "type": "bool"},
+      {"internalType": "string", "name": "deskripsi", "type": "string"},
+      {"internalType": "address", "name": "validator", "type": "address"},
+      {"internalType": "uint64", "name": "timestamp", "type": "uint64"}
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+    "name": "laporanSudahDivalidasi",
+    "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+    "stateMutability": "view",
     "type": "function"
   }
 ];

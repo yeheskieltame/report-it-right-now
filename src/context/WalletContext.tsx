@@ -150,6 +150,10 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       provider: null,
     });
     setContractService(null);
+    
+    // Clear localStorage
+    localStorage.removeItem('selectedInstitution');
+    localStorage.removeItem('selectedRole');
   };
 
   const updateContracts = (newContracts: ContractAddresses) => {
@@ -159,29 +163,56 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   useEffect(() => {
     const checkConnection = async () => {
       if (typeof window.ethereum !== 'undefined') {
-        const provider = new ethers.BrowserProvider(window.ethereum);
-        const accounts = await provider.listAccounts();
-        if (accounts.length > 0) {
-          const signer = await provider.getSigner();
-          const address = await signer.getAddress();
-          
-          const contractServiceInstance = new ContractService(provider, signer);
-          setContractService(contractServiceInstance);
-          
-          const role = await checkUserRole(address);
-          
-          setWalletState({
-            address,
-            isConnected: true,
-            role,
-            signer,
-            provider,
-          });
+        try {
+          const provider = new ethers.BrowserProvider(window.ethereum);
+          const accounts = await provider.listAccounts();
+          if (accounts.length > 0) {
+            const signer = await provider.getSigner();
+            const address = await signer.getAddress();
+            
+            const contractServiceInstance = new ContractService(provider, signer);
+            setContractService(contractServiceInstance);
+            
+            const role = await checkUserRole(address);
+            
+            setWalletState({
+              address,
+              isConnected: true,
+              role,
+              signer,
+              provider,
+            });
+          }
+        } catch (error) {
+          console.error('Error checking wallet connection:', error);
         }
       }
     };
 
     checkConnection();
+
+    // Listen for account changes
+    if (window.ethereum) {
+      window.ethereum.on('accountsChanged', (accounts: string[]) => {
+        if (accounts.length === 0) {
+          disconnectWallet();
+        } else {
+          // Reconnect with new account
+          connectWallet();
+        }
+      });
+
+      window.ethereum.on('chainChanged', () => {
+        window.location.reload();
+      });
+    }
+
+    return () => {
+      if (window.ethereum) {
+        window.ethereum.removeAllListeners('accountsChanged');
+        window.ethereum.removeAllListeners('chainChanged');
+      }
+    };
   }, []);
 
   return (
