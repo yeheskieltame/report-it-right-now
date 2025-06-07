@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { ethers } from 'ethers';
 import { WalletState, UserRole, ContractAddresses } from '../types';
@@ -191,26 +190,33 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     checkConnection();
 
+    // Store event handlers to properly remove them later
+    let accountsChangedHandler: (accounts: string[]) => void;
+    let chainChangedHandler: () => void;
+
     // Listen for account changes
     if (window.ethereum) {
-      window.ethereum.on('accountsChanged', (accounts: string[]) => {
+      accountsChangedHandler = (accounts: string[]) => {
         if (accounts.length === 0) {
           disconnectWallet();
         } else {
           // Reconnect with new account
           connectWallet();
         }
-      });
+      };
 
-      window.ethereum.on('chainChanged', () => {
+      chainChangedHandler = () => {
         window.location.reload();
-      });
+      };
+
+      window.ethereum.on('accountsChanged', accountsChangedHandler);
+      window.ethereum.on('chainChanged', chainChangedHandler);
     }
 
     return () => {
-      if (window.ethereum) {
-        window.ethereum.removeAllListeners('accountsChanged');
-        window.ethereum.removeAllListeners('chainChanged');
+      if (window.ethereum && accountsChangedHandler && chainChangedHandler) {
+        window.ethereum.removeListener('accountsChanged', accountsChangedHandler);
+        window.ethereum.removeListener('chainChanged', chainChangedHandler);
       }
     };
   }, []);

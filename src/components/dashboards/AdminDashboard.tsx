@@ -1,38 +1,295 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Building2, Users, FileText, Scale } from 'lucide-react';
+import { Building2, Users, FileText, Scale, AlertCircle } from 'lucide-react';
+import { useWallet } from '../../context/WalletContext';
+import { toast } from 'sonner';
+
+interface InstitutionData {
+  institusiId: number;
+  nama: string;
+  admin: string;
+  treasury: string;
+}
+
+interface ValidatorInfo {
+  address: string;
+  reputation: number;
+  isActive: boolean;
+}
+
+interface ReportData {
+  id: number;
+  title: string;
+  description: string;
+  status: string;
+  pelapor: string;
+  timestamp: number;
+}
 
 const AdminDashboard: React.FC = () => {
+  const { contractService, address } = useWallet();
   const [newValidatorAddress, setNewValidatorAddress] = useState('');
   const [newReporterAddress, setNewReporterAddress] = useState('');
-  const [validators, setValidators] = useState<any[]>([]);
-  const [reporters, setReporters] = useState<any[]>([]);
-  const [validatedReports, setValidatedReports] = useState<any[]>([]);
-  const [appealReports, setAppealReports] = useState<any[]>([]);
+  const [validators, setValidators] = useState<ValidatorInfo[]>([]);
+  const [reporters, setReporters] = useState<string[]>([]);
+  const [validatedReports, setValidatedReports] = useState<ReportData[]>([]);
+  const [appealReports, setAppealReports] = useState<ReportData[]>([]);
+  const [institutionData, setInstitutionData] = useState<InstitutionData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [contributionLevel, setContributionLevel] = useState<{[key: number]: number}>({});
 
-  const handleAddValidator = () => {
-    console.log('Adding validator:', newValidatorAddress);
-    setNewValidatorAddress('');
+  // Get current institution ID from localStorage
+  const selectedInstitution = localStorage.getItem('selectedInstitution');
+  const institusiId = selectedInstitution ? parseInt(selectedInstitution) : 0;
+
+  useEffect(() => {
+    if (contractService && institusiId > 0) {
+      loadInstitutionData();
+    }
+  }, [contractService, institusiId]);
+
+  const loadInstitutionData = async () => {
+    if (!contractService || institusiId === 0) return;
+    
+    setLoading(true);
+    try {
+      // Load institution data
+      const [nama, admin, treasury] = await contractService.getInstitusiData(institusiId);
+      setInstitutionData({
+        institusiId,
+        nama,
+        admin,
+        treasury
+      });
+
+      // Load validators
+      await loadValidators();
+      
+      // Load reports
+      await loadReports();
+      
+    } catch (error) {
+      console.error('Error loading institution data:', error);
+      toast.error('Gagal memuat data institusi');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleAddReporter = () => {
-    console.log('Adding reporter:', newReporterAddress);
-    setNewReporterAddress('');
+  const loadValidators = async () => {
+    if (!contractService) return;
+    
+    try {
+      const validatorAddresses = await contractService.getValidatorList(institusiId);
+      const validatorInfos: ValidatorInfo[] = [];
+      
+      for (const validatorAddr of validatorAddresses) {
+        try {
+          const reputation = await contractService.getValidatorReputation(validatorAddr);
+          const stakedAmount = await contractService.getStakedAmount(validatorAddr);
+          const minStake = await contractService.getMinStakeAmount();
+          
+          validatorInfos.push({
+            address: validatorAddr,
+            reputation,
+            isActive: parseFloat(stakedAmount) >= parseFloat(minStake)
+          });
+        } catch (error) {
+          console.error(`Error loading validator ${validatorAddr}:`, error);
+        }
+      }
+      
+      setValidators(validatorInfos);
+    } catch (error) {
+      console.error('Error loading validators:', error);
+    }
   };
 
-  const handleSetContribution = (reportId: string, level: number) => {
-    console.log('Setting contribution level:', reportId, level);
+  const loadReports = async () => {
+    if (!contractService) return;
+    
+    try {
+      const totalReports = await contractService.getLaporanCount();
+      const validatedReportsList: ReportData[] = [];
+      const appealReportsList: ReportData[] = [];
+      
+      for (let i = 1; i <= totalReports; i++) {
+        try {
+          const reportDetails = await contractService.getLaporanDetails(i);
+          
+          // Check if report belongs to this institution
+          if (Number(reportDetails.institusiId) === institusiId) {
+            const reportData: ReportData = {
+              id: Number(reportDetails.laporanId),
+              title: reportDetails.judul,
+              description: reportDetails.deskripsi,
+              status: reportDetails.status,
+              pelapor: reportDetails.pelapor,
+              timestamp: Number(reportDetails.creationTimestamp)
+            };
+            
+            // Check if it's an appeal
+            const isAppeal = await contractService.isBanding(i);
+            
+            if (isAppeal) {
+              appealReportsList.push(reportData);
+            } else if (reportData.status === 'Valid' || reportData.status === 'Invalid') {
+              validatedReportsList.push(reportData);
+            }
+          }
+        } catch (error) {
+          console.log(`Error loading report ${i}:`, error);
+        }
+      }
+      
+      setValidatedReports(validatedReportsList);
+      setAppealReports(appealReportsList);
+    } catch (error) {
+      console.error('Error loading reports:', error);
+    }
   };
 
-  const handleAppealDecision = (reportId: string, userWins: boolean) => {
-    console.log('Appeal decision:', reportId, userWins);
+  const handleAddValidator = async () => {
+    if (!contractService || !newValidatorAddress || institusiId === 0) {
+      toast.error('Alamat validator tidak valid');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      toast.info('Menambahkan validator...');
+      
+      const tx = await contractService.tambahValidator(institusiId, newValidatorAddress);
+      toast.info('Transaksi dikirim, menunggu konfirmasi...');
+      
+      await tx.wait();
+      toast.success('Validator berhasil ditambahkan!');
+      
+      setNewValidatorAddress('');
+      await loadValidators();
+    } catch (error: any) {
+      console.error('Error adding validator:', error);
+      toast.error(`Gagal menambahkan validator: ${error.message || 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const handleAddReporter = async () => {
+    if (!contractService || !newReporterAddress || institusiId === 0) {
+      toast.error('Alamat pelapor tidak valid');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      toast.info('Menambahkan pelapor...');
+      
+      const tx = await contractService.tambahPelapor(institusiId, newReporterAddress);
+      toast.info('Transaksi dikirim, menunggu konfirmasi...');
+      
+      await tx.wait();
+      toast.success('Pelapor berhasil ditambahkan!');
+      
+      setNewReporterAddress('');
+      // Refresh the page data
+      await loadInstitutionData();
+    } catch (error: any) {
+      console.error('Error adding reporter:', error);
+      toast.error(`Gagal menambahkan pelapor: ${error.message || 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSetContribution = async (reportId: number) => {
+    if (!contractService || !contributionLevel[reportId]) {
+      toast.error('Level kontribusi tidak valid');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      toast.info('Mengatur level kontribusi...');
+      
+      const tx = await contractService.setContributionLevel(reportId, contributionLevel[reportId]);
+      toast.info('Transaksi dikirim, menunggu konfirmasi...');
+      
+      await tx.wait();
+      toast.success('Level kontribusi berhasil diatur!');
+      
+      await loadReports();
+    } catch (error: any) {
+      console.error('Error setting contribution:', error);
+      toast.error(`Gagal mengatur kontribusi: ${error.message || 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAppealDecision = async (reportId: number, userWins: boolean) => {
+    if (!contractService) return;
+
+    try {
+      setLoading(true);
+      toast.info('Memproses keputusan banding...');
+      
+      const tx = await contractService.finalisasiBanding(reportId, userWins);
+      toast.info('Transaksi dikirim, menunggu konfirmasi...');
+      
+      await tx.wait();
+      toast.success(`Banding ${userWins ? 'diterima' : 'ditolak'}!`);
+      
+      await loadReports();
+    } catch (error: any) {
+      console.error('Error processing appeal:', error);
+      toast.error(`Gagal memproses banding: ${error.message || 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRemoveValidator = async (validatorAddress: string) => {
+    if (!contractService) return;
+
+    try {
+      setLoading(true);
+      toast.info('Menghapus validator...');
+      
+      const tx = await contractService.removeValidator(institusiId, validatorAddress);
+      toast.info('Transaksi dikirim, menunggu konfirmasi...');
+      
+      await tx.wait();
+      toast.success('Validator berhasil dihapus!');
+      
+      await loadValidators();
+    } catch (error: any) {
+      console.error('Error removing validator:', error);
+      toast.error(`Gagal menghapus validator: ${error.message || 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!institutionData && !loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Card className="max-w-md">
+          <CardContent className="p-6 text-center">
+            <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Data Institusi Tidak Ditemukan</h3>
+            <p className="text-muted-foreground">Silakan pilih institusi terlebih dahulu</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -58,8 +315,9 @@ const AdminDashboard: React.FC = () => {
                 <CardTitle className="text-lg">Institution Info</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold text-blue-600">Polda Metro Jaya</p>
-                <p className="text-sm text-muted-foreground">Institution ID: INST001</p>
+                <p className="text-2xl font-bold text-blue-600">{institutionData?.nama || 'Loading...'}</p>
+                <p className="text-sm text-muted-foreground">Institution ID: {institusiId}</p>
+                <p className="text-xs text-muted-foreground mt-2">Treasury: {institutionData?.treasury}</p>
               </CardContent>
             </Card>
 
@@ -75,11 +333,11 @@ const AdminDashboard: React.FC = () => {
 
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-lg">Registered Users</CardTitle>
+                <CardTitle className="text-lg">Total Reports</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold text-orange-600">{reporters.length}</p>
-                <p className="text-sm text-muted-foreground">Active reporters</p>
+                <p className="text-2xl font-bold text-orange-600">{validatedReports.length}</p>
+                <p className="text-sm text-muted-foreground">Validated reports</p>
               </CardContent>
             </Card>
           </div>
@@ -90,7 +348,9 @@ const AdminDashboard: React.FC = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {validators.length === 0 ? (
+                {loading ? (
+                  <p className="text-muted-foreground text-center py-4">Loading validators...</p>
+                ) : validators.length === 0 ? (
                   <p className="text-muted-foreground text-center py-4">No validators registered</p>
                 ) : (
                   validators.map((validator, index) => (
@@ -103,6 +363,14 @@ const AdminDashboard: React.FC = () => {
                         <Badge className={validator.isActive ? 'bg-green-500' : 'bg-gray-500'}>
                           {validator.isActive ? 'Active' : 'Inactive'}
                         </Badge>
+                        <Button 
+                          onClick={() => handleRemoveValidator(validator.address)}
+                          variant="destructive"
+                          size="sm"
+                          disabled={loading}
+                        >
+                          Remove
+                        </Button>
                       </div>
                     </div>
                   ))
@@ -129,13 +397,15 @@ const AdminDashboard: React.FC = () => {
                     placeholder="0x..."
                     value={newValidatorAddress}
                     onChange={(e) => setNewValidatorAddress(e.target.value)}
+                    disabled={loading}
                   />
                 </div>
                 <Button 
                   onClick={handleAddValidator}
                   className="w-full bg-gradient-to-r from-blue-500 to-green-500"
+                  disabled={loading || !newValidatorAddress}
                 >
-                  Add Validator
+                  {loading ? 'Adding...' : 'Add Validator'}
                 </Button>
               </CardContent>
             </Card>
@@ -155,13 +425,15 @@ const AdminDashboard: React.FC = () => {
                     placeholder="0x..."
                     value={newReporterAddress}
                     onChange={(e) => setNewReporterAddress(e.target.value)}
+                    disabled={loading}
                   />
                 </div>
                 <Button 
                   onClick={handleAddReporter}
                   className="w-full bg-gradient-to-r from-orange-500 to-red-500"
+                  disabled={loading || !newReporterAddress}
                 >
-                  Add Reporter
+                  {loading ? 'Adding...' : 'Add Reporter'}
                 </Button>
               </CardContent>
             </Card>
@@ -178,15 +450,18 @@ const AdminDashboard: React.FC = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {validatedReports.length === 0 ? (
+                {loading ? (
+                  <p className="text-muted-foreground text-center py-8">Loading reports...</p>
+                ) : validatedReports.length === 0 ? (
                   <p className="text-muted-foreground text-center py-8">No validated reports</p>
                 ) : (
-                  validatedReports.map((report, index) => (
-                    <div key={index} className="border rounded-lg p-4 space-y-3">
+                  validatedReports.map((report) => (
+                    <div key={report.id} className="border rounded-lg p-4 space-y-3">
                       <div className="flex justify-between items-start">
                         <div>
                           <h4 className="font-semibold">{report.title}</h4>
                           <p className="text-sm text-muted-foreground">ID: {report.id}</p>
+                          <p className="text-sm text-muted-foreground">Reporter: {report.pelapor}</p>
                         </div>
                         <Badge className={report.status === 'Valid' ? 'bg-green-500' : 'bg-red-500'}>
                           {report.status}
@@ -200,10 +475,17 @@ const AdminDashboard: React.FC = () => {
                           min="1" 
                           max="5" 
                           className="w-32"
+                          value={contributionLevel[report.id] || ''}
+                          onChange={(e) => setContributionLevel(prev => ({
+                            ...prev,
+                            [report.id]: parseInt(e.target.value) || 1
+                          }))}
+                          disabled={loading}
                         />
                         <Button 
-                          onClick={() => handleSetContribution(report.id, 3)}
+                          onClick={() => handleSetContribution(report.id)}
                           size="sm"
+                          disabled={loading || !contributionLevel[report.id]}
                         >
                           Set Contribution
                         </Button>
@@ -226,15 +508,18 @@ const AdminDashboard: React.FC = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {appealReports.length === 0 ? (
+                {loading ? (
+                  <p className="text-muted-foreground text-center py-8">Loading appeals...</p>
+                ) : appealReports.length === 0 ? (
                   <p className="text-muted-foreground text-center py-8">No appeals to review</p>
                 ) : (
-                  appealReports.map((report, index) => (
-                    <div key={index} className="border rounded-lg p-4 space-y-3">
+                  appealReports.map((report) => (
+                    <div key={report.id} className="border rounded-lg p-4 space-y-3">
                       <div className="flex justify-between items-start">
                         <div>
                           <h4 className="font-semibold">{report.title}</h4>
                           <p className="text-sm text-muted-foreground">ID: {report.id}</p>
+                          <p className="text-sm text-muted-foreground">Reporter: {report.pelapor}</p>
                         </div>
                         <Badge className="bg-yellow-500">Appeal</Badge>
                       </div>
@@ -244,6 +529,7 @@ const AdminDashboard: React.FC = () => {
                           onClick={() => handleAppealDecision(report.id, true)}
                           className="bg-green-500 hover:bg-green-600"
                           size="sm"
+                          disabled={loading}
                         >
                           User Wins
                         </Button>
@@ -251,6 +537,7 @@ const AdminDashboard: React.FC = () => {
                           onClick={() => handleAppealDecision(report.id, false)}
                           className="bg-red-500 hover:bg-red-600"
                           size="sm"
+                          disabled={loading}
                         >
                           User Loses
                         </Button>
