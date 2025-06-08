@@ -1,3 +1,4 @@
+
 import { ethers } from 'ethers';
 import { 
   CONTRACT_ADDRESSES, 
@@ -26,6 +27,78 @@ export class ContractService {
       return tx;
     } catch (error: any) {
       console.error(`Error in ${methodName}:`, error);
+      
+      // Parse specific error messages
+      if (error.reason) {
+        throw new Error(`${methodName} failed: ${error.reason}`);
+      } else if (error.message && error.message.includes('execution reverted')) {
+        throw new Error(`${methodName} failed: Transaction was reverted by the contract`);
+      } else if (error.code === 'CALL_EXCEPTION') {
+        throw new Error(`${methodName} failed: Contract call exception - please check your inputs and try again`);
+      }
+      
+      throw error;
+    }
+  }
+
+  // Enhanced buatLaporan method with better validation
+  async buatLaporan(institusiId: number, judul: string, deskripsi: string): Promise<ethers.ContractTransactionResponse> {
+    console.log('Creating report with params:', { institusiId, judul, deskripsi });
+    
+    // Get signer address for validation
+    const signerAddress = await this.signer.getAddress();
+    console.log('Signer address:', signerAddress);
+    
+    // Validate inputs
+    if (!institusiId || institusiId <= 0) {
+      throw new Error('Invalid institution ID');
+    }
+    if (!judul || judul.trim() === '') {
+      throw new Error('Report title cannot be empty');
+    }
+    if (!deskripsi || deskripsi.trim() === '') {
+      throw new Error('Report description cannot be empty');
+    }
+    
+    try {
+      // Check if institution exists
+      const institutionCount = await this.getInstitusiCount();
+      if (institusiId > institutionCount) {
+        throw new Error(`Institution with ID ${institusiId} does not exist`);
+      }
+      
+      // Check if user is registered as reporter for this institution
+      const isRegistered = await this.isPelapor(institusiId, signerAddress);
+      if (!isRegistered) {
+        throw new Error(`You are not registered as a reporter for institution ${institusiId}`);
+      }
+      
+      console.log('All validations passed, creating contract instance...');
+      
+      const contract = new ethers.Contract(CONTRACT_ADDRESSES.user, USER_ABI, this.signer);
+      
+      // Try to estimate gas first to catch any revert reasons
+      try {
+        console.log('Estimating gas...');
+        const gasEstimate = await contract.buatLaporan.estimateGas(institusiId, judul, deskripsi);
+        console.log('Gas estimate successful:', gasEstimate.toString());
+      } catch (gasError: any) {
+        console.error('Gas estimation failed:', gasError);
+        if (gasError.reason) {
+          throw new Error(`Cannot create report: ${gasError.reason}`);
+        } else {
+          throw new Error('Cannot create report: Transaction would fail');
+        }
+      }
+      
+      console.log('Submitting transaction...');
+      return this.executeTransaction(
+        () => contract.buatLaporan(institusiId, judul, deskripsi),
+        'buatLaporan'
+      );
+      
+    } catch (error: any) {
+      console.error('Error in buatLaporan:', error);
       throw error;
     }
   }

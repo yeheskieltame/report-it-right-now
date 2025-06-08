@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { FileText, Plus, History, AlertCircle } from 'lucide-react';
+import { FileText, Plus, History, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 import { useWallet } from '../../context/WalletContext';
 import { useToast } from '@/hooks/use-toast';
 
@@ -24,6 +23,7 @@ const ReporterDashboard: React.FC = () => {
   const [institutions, setInstitutions] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [isRegisteredReporter, setIsRegisteredReporter] = useState<{[key: string]: boolean}>({});
+  const [validationStatus, setValidationStatus] = useState<{[key: string]: 'checking' | 'valid' | 'invalid'}>({});
 
   useEffect(() => {
     loadInstitutions();
@@ -105,6 +105,45 @@ const ReporterDashboard: React.FC = () => {
     }
   };
 
+  const validateReportSubmission = async (institusiId: string) => {
+    if (!contractService || !address || !institusiId) return false;
+    
+    setValidationStatus(prev => ({ ...prev, [institusiId]: 'checking' }));
+    
+    try {
+      // Check if institution exists
+      const institutionCount = await contractService.getInstitusiCount();
+      if (parseInt(institusiId) > institutionCount) {
+        setValidationStatus(prev => ({ ...prev, [institusiId]: 'invalid' }));
+        toast({
+          title: "Invalid Institution",
+          description: "Selected institution does not exist",
+          variant: "destructive"
+        });
+        return false;
+      }
+      
+      // Check if user is registered as reporter
+      const isReporter = await contractService.isPelapor(parseInt(institusiId), address);
+      if (!isReporter) {
+        setValidationStatus(prev => ({ ...prev, [institusiId]: 'invalid' }));
+        toast({
+          title: "Not Authorized", 
+          description: "You are not registered as a reporter for this institution",
+          variant: "destructive"
+        });
+        return false;
+      }
+      
+      setValidationStatus(prev => ({ ...prev, [institusiId]: 'valid' }));
+      return true;
+    } catch (error) {
+      console.error('Validation error:', error);
+      setValidationStatus(prev => ({ ...prev, [institusiId]: 'invalid' }));
+      return false;
+    }
+  };
+
   const handleSubmitReport = async () => {
     if (!contractService || !reportForm.institusiId || !reportForm.judul || !reportForm.deskripsi) {
       toast({
@@ -115,13 +154,9 @@ const ReporterDashboard: React.FC = () => {
       return;
     }
 
-    // Check if user is registered as reporter for selected institution
-    if (!isRegisteredReporter[reportForm.institusiId]) {
-      toast({
-        title: "Error",
-        description: "You are not registered as a reporter for this institution. Please contact the institution admin.",
-        variant: "destructive"
-      });
+    // Validate before submission
+    const isValid = await validateReportSubmission(reportForm.institusiId);
+    if (!isValid) {
       return;
     }
 
@@ -129,14 +164,14 @@ const ReporterDashboard: React.FC = () => {
     try {
       console.log('Submitting report with data:', {
         institusiId: parseInt(reportForm.institusiId),
-        judul: reportForm.judul,
-        deskripsi: reportForm.deskripsi
+        judul: reportForm.judul.trim(),
+        deskripsi: reportForm.deskripsi.trim()
       });
 
       const tx = await contractService.buatLaporan(
         parseInt(reportForm.institusiId),
-        reportForm.judul,
-        reportForm.deskripsi
+        reportForm.judul.trim(),
+        reportForm.deskripsi.trim()
       );
       
       toast({
@@ -164,9 +199,7 @@ const ReporterDashboard: React.FC = () => {
       console.error('Error submitting report:', error);
       
       let errorMessage = "Failed to submit report";
-      if (error.reason) {
-        errorMessage = `Error: ${error.reason}`;
-      } else if (error.message) {
+      if (error.message) {
         errorMessage = error.message;
       }
       
@@ -257,6 +290,20 @@ const ReporterDashboard: React.FC = () => {
     }
   };
 
+  const getValidationIcon = (institusiId: string) => {
+    const status = validationStatus[institusiId];
+    switch (status) {
+      case 'checking':
+        return <div className="w-4 h-4 animate-spin border-2 border-blue-500 border-t-transparent rounded-full" />;
+      case 'valid':
+        return <CheckCircle className="w-4 h-4 text-green-500" />;
+      case 'invalid':
+        return <XCircle className="w-4 h-4 text-red-500" />;
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center space-x-3">
@@ -283,34 +330,35 @@ const ReporterDashboard: React.FC = () => {
             <CardContent className="space-y-6">
               <div className="space-y-2">
                 <Label htmlFor="institution">Select Institution</Label>
-                <Select 
-                  value={reportForm.institusiId} 
-                  onValueChange={(value) => setReportForm({...reportForm, institusiId: value})}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose an institution" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {institutions.map((inst) => (
-                      <SelectItem key={inst.id} value={inst.id} disabled={!inst.isRegistered}>
-                        <div className="flex items-center space-x-2">
-                          <span>{inst.name}</span>
-                          {!inst.isRegistered && (
-                            <div className="flex items-center space-x-1 text-red-500">
-                              <AlertCircle className="w-4 h-4" />
-                              <span className="text-xs">Not registered</span>
-                            </div>
-                          )}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {reportForm.institusiId && !isRegisteredReporter[reportForm.institusiId] && (
-                  <p className="text-sm text-red-600">
-                    You are not registered as a reporter for this institution. Contact the admin to be added.
-                  </p>
-                )}
+                <div className="flex items-center space-x-2">
+                  <Select 
+                    value={reportForm.institusiId} 
+                    onValueChange={(value) => {
+                      setReportForm({...reportForm, institusiId: value});
+                      validateReportSubmission(value);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose an institution" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {institutions.map((inst) => (
+                        <SelectItem key={inst.id} value={inst.id}>
+                          <div className="flex items-center space-x-2">
+                            <span>{inst.name}</span>
+                            {!inst.isRegistered && (
+                              <div className="flex items-center space-x-1 text-red-500">
+                                <AlertCircle className="w-4 h-4" />
+                                <span className="text-xs">Not registered</span>
+                              </div>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {reportForm.institusiId && getValidationIcon(reportForm.institusiId)}
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -320,7 +368,9 @@ const ReporterDashboard: React.FC = () => {
                   placeholder="Enter report title"
                   value={reportForm.judul}
                   onChange={(e) => setReportForm({...reportForm, judul: e.target.value})}
+                  maxLength={100}
                 />
+                <p className="text-xs text-gray-500">{reportForm.judul.length}/100 characters</p>
               </div>
 
               <div className="space-y-2">
@@ -331,13 +381,21 @@ const ReporterDashboard: React.FC = () => {
                   rows={6}
                   value={reportForm.deskripsi}
                   onChange={(e) => setReportForm({...reportForm, deskripsi: e.target.value})}
+                  maxLength={500}
                 />
+                <p className="text-xs text-gray-500">{reportForm.deskripsi.length}/500 characters</p>
               </div>
 
               <Button 
                 onClick={handleSubmitReport}
                 className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600"
-                disabled={!reportForm.institusiId || !reportForm.judul || !reportForm.deskripsi || loading || !isRegisteredReporter[reportForm.institusiId]}
+                disabled={
+                  !reportForm.institusiId || 
+                  !reportForm.judul.trim() || 
+                  !reportForm.deskripsi.trim() || 
+                  loading || 
+                  validationStatus[reportForm.institusiId] !== 'valid'
+                }
               >
                 {loading ? 'Submitting...' : 'Submit Report'}
               </Button>
