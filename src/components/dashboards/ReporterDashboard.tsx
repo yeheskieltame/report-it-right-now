@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -131,18 +132,6 @@ const ReporterDashboard: React.FC = () => {
         judul: reportForm.judul,
         deskripsi: reportForm.deskripsi
       });
-
-      // Estimate gas first
-      const gasEstimate = await contractService.provider.estimateGas({
-        to: contractService['CONTRACT_ADDRESSES']?.user || '0xAaeECCAe4203F94f634B349bB82D61b1f6F34FE5',
-        data: contractService.signer.interface?.encodeFunctionData('buatLaporan', [
-          parseInt(reportForm.institusiId),
-          reportForm.judul,
-          reportForm.deskripsi
-        ])
-      });
-
-      console.log('Gas estimate:', gasEstimate.toString());
 
       const tx = await contractService.buatLaporan(
         parseInt(reportForm.institusiId),
