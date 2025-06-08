@@ -17,6 +17,31 @@ export class ContractService {
     this.signer = signer;
   }
 
+  // Helper method for better error handling
+  private async executeTransaction(contractMethod: () => Promise<any>, methodName: string) {
+    try {
+      console.log(`Executing ${methodName}...`);
+      const tx = await contractMethod();
+      console.log(`${methodName} transaction submitted:`, tx.hash);
+      return tx;
+    } catch (error: any) {
+      console.error(`Error in ${methodName}:`, error);
+      throw error;
+    }
+  }
+
+  // Helper method for gas estimation
+  private async estimateGasWithRetry(contract: ethers.Contract, methodName: string, params: any[]) {
+    try {
+      const gasEstimate = await contract[methodName].estimateGas(...params);
+      console.log(`Gas estimate for ${methodName}:`, gasEstimate.toString());
+      return gasEstimate;
+    } catch (error) {
+      console.warn(`Gas estimation failed for ${methodName}, using default`);
+      return null;
+    }
+  }
+
   // RTK Token Contract Methods
   async getRTKBalance(address: string): Promise<string> {
     const contract = new ethers.Contract(CONTRACT_ADDRESSES.rtkToken, RTKT_TOKEN_ABI, this.provider);
@@ -27,7 +52,11 @@ export class ContractService {
   async approveRTK(spender: string, amount: string): Promise<ethers.ContractTransactionResponse> {
     const contract = new ethers.Contract(CONTRACT_ADDRESSES.rtkToken, RTKT_TOKEN_ABI, this.signer);
     const amountWei = ethers.parseEther(amount);
-    return await contract.approve(spender, amountWei);
+    
+    return this.executeTransaction(
+      () => contract.approve(spender, amountWei),
+      'approveRTK'
+    );
   }
 
   async getAllowance(owner: string, spender: string): Promise<string> {
@@ -70,13 +99,21 @@ export class ContractService {
   async stake(amount: string): Promise<ethers.ContractTransactionResponse> {
     const contract = new ethers.Contract(CONTRACT_ADDRESSES.rewardManager, REWARD_MANAGER_ABI, this.signer);
     const amountWei = ethers.parseEther(amount);
-    return await contract.stake(amountWei);
+    
+    return this.executeTransaction(
+      () => contract.stake(amountWei),
+      'stake'
+    );
   }
 
   async unstake(amount: string): Promise<ethers.ContractTransactionResponse> {
     const contract = new ethers.Contract(CONTRACT_ADDRESSES.rewardManager, REWARD_MANAGER_ABI, this.signer);
     const amountWei = ethers.parseEther(amount);
-    return await contract.unstake(amountWei);
+    
+    return this.executeTransaction(
+      () => contract.unstake(amountWei),
+      'unstake'
+    );
   }
 
   async getStakedAmount(validator: string): Promise<string> {
@@ -195,12 +232,23 @@ export class ContractService {
   // User Contract Methods
   async buatLaporan(institusiId: number, judul: string, deskripsi: string): Promise<ethers.ContractTransactionResponse> {
     const contract = new ethers.Contract(CONTRACT_ADDRESSES.user, USER_ABI, this.signer);
-    return await contract.buatLaporan(institusiId, judul, deskripsi);
+    
+    // Estimate gas first
+    await this.estimateGasWithRetry(contract, 'buatLaporan', [institusiId, judul, deskripsi]);
+    
+    return this.executeTransaction(
+      () => contract.buatLaporan(institusiId, judul, deskripsi),
+      'buatLaporan'
+    );
   }
 
   async ajukanBanding(laporanId: number): Promise<ethers.ContractTransactionResponse> {
     const contract = new ethers.Contract(CONTRACT_ADDRESSES.user, USER_ABI, this.signer);
-    return await contract.ajukanBanding(laporanId);
+    
+    return this.executeTransaction(
+      () => contract.ajukanBanding(laporanId),
+      'ajukanBanding'
+    );
   }
 
   async getLaporanCount(): Promise<number> {
@@ -244,7 +292,11 @@ export class ContractService {
   // Validator Contract Methods
   async validasiLaporan(laporanId: number, isValid: boolean, deskripsi: string): Promise<ethers.ContractTransactionResponse> {
     const contract = new ethers.Contract(CONTRACT_ADDRESSES.validator, VALIDATOR_ABI, this.signer);
-    return await contract.validasiLaporan(laporanId, isValid, deskripsi);
+    
+    return this.executeTransaction(
+      () => contract.validasiLaporan(laporanId, isValid, deskripsi),
+      'validasiLaporan'
+    );
   }
 
   async resignFromInstitusi(institusiId: number): Promise<ethers.ContractTransactionResponse> {

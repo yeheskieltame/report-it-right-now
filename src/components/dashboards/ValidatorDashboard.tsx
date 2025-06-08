@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Shield, Coins, Trophy, Settings } from 'lucide-react';
+import { Shield, Coins, Trophy, Settings, AlertCircle, CheckCircle } from 'lucide-react';
 import { useWallet } from '../../context/WalletContext';
 import { useToast } from '@/hooks/use-toast';
 
@@ -21,7 +20,10 @@ const ValidatorDashboard: React.FC = () => {
   const [tasks, setTasks] = useState<any[]>([]);
   const [stakedAmount, setStakedAmount] = useState('0');
   const [rtkBalance, setRtkBalance] = useState('0');
+  const [minStakeAmount, setMinStakeAmount] = useState('0');
+  const [allowance, setAllowance] = useState('0');
   const [loading, setLoading] = useState(false);
+  const [stakingStep, setStakingStep] = useState<'approve' | 'stake' | 'complete'>('approve');
 
   useEffect(() => {
     loadValidatorData();
@@ -32,11 +34,24 @@ const ValidatorDashboard: React.FC = () => {
     if (!contractService || !address) return;
 
     try {
-      const staked = await contractService.getStakedAmount(address);
-      setStakedAmount(staked);
+      const [staked, balance, minStake, currentAllowance] = await Promise.all([
+        contractService.getStakedAmount(address),
+        contractService.getRTKBalance(address),
+        contractService.getMinStakeAmount(),
+        contractService.getAllowance(address, contractService['CONTRACT_ADDRESSES']?.rewardManager || '0x641D0Bf2936E2183443c60513b1094Ff5E39D42F')
+      ]);
 
-      const balance = await contractService.getRTKBalance(address);
+      setStakedAmount(staked);
       setRtkBalance(balance);
+      setMinStakeAmount(minStake);
+      setAllowance(currentAllowance);
+
+      console.log('Validator data loaded:', {
+        staked,
+        balance,
+        minStake,
+        allowance: currentAllowance
+      });
     } catch (error) {
       console.error('Error loading validator data:', error);
     }
@@ -78,6 +93,12 @@ const ValidatorDashboard: React.FC = () => {
 
     setLoading(true);
     try {
+      console.log('Submitting validation:', {
+        reportId: parseInt(reportId),
+        isValid: result.isValid,
+        description: result.description
+      });
+
       const tx = await contractService.validasiLaporan(
         parseInt(reportId),
         result.isValid,
@@ -86,7 +107,7 @@ const ValidatorDashboard: React.FC = () => {
       
       toast({
         title: "Validation Submitted",
-        description: "Your validation is being processed..."
+        description: `Transaction hash: ${tx.hash}. Your validation is being processed...`
       });
 
       await tx.wait();
@@ -97,11 +118,73 @@ const ValidatorDashboard: React.FC = () => {
       });
 
       loadTasks();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error submitting validation:', error);
       toast({
         title: "Error",
-        description: "Failed to submit validation",
+        description: error.reason || "Failed to submit validation",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApprove = async () => {
+    if (!contractService || !stakeAmount) return;
+
+    const amount = parseFloat(stakeAmount);
+    const minStake = parseFloat(minStakeAmount);
+    
+    if (amount < minStake) {
+      toast({
+        title: "Invalid Amount",
+        description: `Minimum stake amount is ${minStakeAmount} RTK`,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (amount > parseFloat(rtkBalance)) {
+      toast({
+        title: "Insufficient Balance",
+        description: `You only have ${rtkBalance} RTK tokens`,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      console.log('Approving RTK tokens:', {
+        spender: contractService['CONTRACT_ADDRESSES']?.rewardManager,
+        amount: stakeAmount
+      });
+
+      const approveTx = await contractService.approveRTK(
+        contractService['CONTRACT_ADDRESSES']?.rewardManager || '0x641D0Bf2936E2183443c60513b1094Ff5E39D42F',
+        stakeAmount
+      );
+      
+      toast({
+        title: "Approval Submitted",
+        description: "Approving tokens for staking..."
+      });
+
+      await approveTx.wait();
+      
+      toast({
+        title: "Approval Successful",
+        description: "Tokens approved! You can now stake."
+      });
+
+      setStakingStep('stake');
+      loadValidatorData(); // Refresh allowance
+    } catch (error: any) {
+      console.error('Error approving tokens:', error);
+      toast({
+        title: "Error",
+        description: error.reason || "Failed to approve tokens",
         variant: "destructive"
       });
     } finally {
@@ -114,20 +197,8 @@ const ValidatorDashboard: React.FC = () => {
 
     setLoading(true);
     try {
-      // First approve tokens
-      const approveTx = await contractService.approveRTK(
-        contractService['CONTRACT_ADDRESSES'].rewardManager,
-        stakeAmount
-      );
-      
-      toast({
-        title: "Approval Submitted",
-        description: "Approving tokens for staking..."
-      });
+      console.log('Staking tokens:', stakeAmount);
 
-      await approveTx.wait();
-
-      // Then stake
       const stakeTx = await contractService.stake(stakeAmount);
       
       toast({
@@ -143,12 +214,13 @@ const ValidatorDashboard: React.FC = () => {
       });
 
       setStakeAmount('');
+      setStakingStep('complete');
       loadValidatorData();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error staking:', error);
       toast({
         title: "Error",
-        description: "Failed to stake tokens",
+        description: error.reason || "Failed to stake tokens",
         variant: "destructive"
       });
     } finally {
@@ -158,6 +230,18 @@ const ValidatorDashboard: React.FC = () => {
 
   const handleUnstake = async () => {
     if (!contractService || !unstakeAmount) return;
+
+    const amount = parseFloat(unstakeAmount);
+    const staked = parseFloat(stakedAmount);
+    
+    if (amount > staked) {
+      toast({
+        title: "Invalid Amount",
+        description: `You only have ${stakedAmount} RTK staked`,
+        variant: "destructive"
+      });
+      return;
+    }
 
     setLoading(true);
     try {
@@ -177,11 +261,11 @@ const ValidatorDashboard: React.FC = () => {
 
       setUnstakeAmount('');
       loadValidatorData();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error unstaking:', error);
       toast({
         title: "Error",
-        description: "Failed to unstake tokens",
+        description: error.reason || "Failed to unstake tokens",
         variant: "destructive"
       });
     } finally {
@@ -197,6 +281,18 @@ const ValidatorDashboard: React.FC = () => {
         [field]: value
       }
     }));
+  };
+
+  const canStake = () => {
+    const amount = parseFloat(stakeAmount);
+    const currentAllowance = parseFloat(allowance);
+    return amount > 0 && currentAllowance >= amount;
+  };
+
+  const needsApproval = () => {
+    const amount = parseFloat(stakeAmount);
+    const currentAllowance = parseFloat(allowance);
+    return amount > 0 && currentAllowance < amount;
   };
 
   return (
@@ -283,7 +379,7 @@ const ValidatorDashboard: React.FC = () => {
         </TabsContent>
 
         <TabsContent value="staking" className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg">Staked Amount</CardTitle>
@@ -306,11 +402,21 @@ const ValidatorDashboard: React.FC = () => {
 
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-lg">Reputation Score</CardTitle>
+                <CardTitle className="text-lg">Min Stake</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold text-purple-600">85</p>
-                <p className="text-sm text-muted-foreground">Out of 100</p>
+                <p className="text-2xl font-bold text-orange-600">{parseFloat(minStakeAmount).toFixed(2)} RTK</p>
+                <p className="text-sm text-muted-foreground">Minimum required</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg">Allowance</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold text-purple-600">{parseFloat(allowance).toFixed(2)} RTK</p>
+                <p className="text-sm text-muted-foreground">Approved for staking</p>
               </CardContent>
             </Card>
           </div>
@@ -328,18 +434,54 @@ const ValidatorDashboard: React.FC = () => {
                   <Label htmlFor="stake-amount">Amount to Stake (RTK)</Label>
                   <Input
                     id="stake-amount"
-                    placeholder="Enter amount"
+                    placeholder={`Min: ${minStakeAmount} RTK`}
                     value={stakeAmount}
                     onChange={(e) => setStakeAmount(e.target.value)}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Balance: {rtkBalance} RTK | Min: {minStakeAmount} RTK | Approved: {allowance} RTK
+                  </p>
                 </div>
-                <Button 
-                  onClick={handleStake}
-                  className="w-full bg-gradient-to-r from-blue-500 to-green-500"
-                  disabled={loading || !stakeAmount}
-                >
-                  {loading ? 'Processing...' : 'Stake Tokens'}
-                </Button>
+
+                {needsApproval() && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                    <div className="flex items-center space-x-2">
+                      <AlertCircle className="w-4 h-4 text-yellow-600" />
+                      <p className="text-sm text-yellow-800">
+                        You need to approve {stakeAmount} RTK tokens first
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {canStake() && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                    <div className="flex items-center space-x-2">
+                      <CheckCircle className="w-4 h-4 text-green-600" />
+                      <p className="text-sm text-green-800">
+                        Ready to stake {stakeAmount} RTK tokens
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {needsApproval() ? (
+                  <Button 
+                    onClick={handleApprove}
+                    className="w-full bg-gradient-to-r from-yellow-500 to-orange-500"
+                    disabled={loading || !stakeAmount || parseFloat(stakeAmount) <= 0}
+                  >
+                    {loading ? 'Approving...' : `Approve ${stakeAmount} RTK`}
+                  </Button>
+                ) : (
+                  <Button 
+                    onClick={handleStake}
+                    className="w-full bg-gradient-to-r from-blue-500 to-green-500"
+                    disabled={loading || !canStake()}
+                  >
+                    {loading ? 'Staking...' : 'Stake Tokens'}
+                  </Button>
+                )}
               </CardContent>
             </Card>
 

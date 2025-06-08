@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { FileText, Plus, History } from 'lucide-react';
+import { FileText, Plus, History, AlertCircle } from 'lucide-react';
 import { useWallet } from '../../context/WalletContext';
 import { useToast } from '@/hooks/use-toast';
 
@@ -23,6 +22,7 @@ const ReporterDashboard: React.FC = () => {
   const [myReports, setMyReports] = useState<any[]>([]);
   const [institutions, setInstitutions] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isRegisteredReporter, setIsRegisteredReporter] = useState<{[key: string]: boolean}>({});
 
   useEffect(() => {
     loadInstitutions();
@@ -39,7 +39,23 @@ const ReporterDashboard: React.FC = () => {
       for (let i = 1; i <= count; i++) {
         try {
           const [nama] = await contractService.getInstitusiData(i);
-          institutionsList.push({ id: i.toString(), name: nama });
+          
+          // Check if user is registered as reporter for this institution
+          let isReporter = false;
+          if (address) {
+            isReporter = await contractService.isPelapor(i, address);
+          }
+          
+          institutionsList.push({ 
+            id: i.toString(), 
+            name: nama,
+            isRegistered: isReporter
+          });
+          
+          setIsRegisteredReporter(prev => ({
+            ...prev,
+            [i.toString()]: isReporter
+          }));
         } catch (error) {
           console.log(`Institution ${i} not found`);
         }
@@ -48,6 +64,11 @@ const ReporterDashboard: React.FC = () => {
       setInstitutions(institutionsList);
     } catch (error) {
       console.error('Error loading institutions:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load institutions",
+        variant: "destructive"
+      });
     }
   };
 
@@ -93,8 +114,36 @@ const ReporterDashboard: React.FC = () => {
       return;
     }
 
+    // Check if user is registered as reporter for selected institution
+    if (!isRegisteredReporter[reportForm.institusiId]) {
+      toast({
+        title: "Error",
+        description: "You are not registered as a reporter for this institution. Please contact the institution admin.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setLoading(true);
     try {
+      console.log('Submitting report with data:', {
+        institusiId: parseInt(reportForm.institusiId),
+        judul: reportForm.judul,
+        deskripsi: reportForm.deskripsi
+      });
+
+      // Estimate gas first
+      const gasEstimate = await contractService.provider.estimateGas({
+        to: contractService['CONTRACT_ADDRESSES']?.user || '0xAaeECCAe4203F94f634B349bB82D61b1f6F34FE5',
+        data: contractService.signer.interface?.encodeFunctionData('buatLaporan', [
+          parseInt(reportForm.institusiId),
+          reportForm.judul,
+          reportForm.deskripsi
+        ])
+      });
+
+      console.log('Gas estimate:', gasEstimate.toString());
+
       const tx = await contractService.buatLaporan(
         parseInt(reportForm.institusiId),
         reportForm.judul,
@@ -103,10 +152,12 @@ const ReporterDashboard: React.FC = () => {
       
       toast({
         title: "Transaction Submitted",
-        description: "Your report is being submitted..."
+        description: `Transaction hash: ${tx.hash}. Your report is being submitted...`
       });
 
-      await tx.wait();
+      console.log('Transaction submitted:', tx.hash);
+      const receipt = await tx.wait();
+      console.log('Transaction confirmed:', receipt);
       
       toast({
         title: "Success",
@@ -120,11 +171,19 @@ const ReporterDashboard: React.FC = () => {
       });
 
       loadMyReports();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error submitting report:', error);
+      
+      let errorMessage = "Failed to submit report";
+      if (error.reason) {
+        errorMessage = `Error: ${error.reason}`;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: "Error",
-        description: "Failed to submit report",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -137,8 +196,35 @@ const ReporterDashboard: React.FC = () => {
 
     setLoading(true);
     try {
+      // Get stake amount first
+      const stakeAmount = await contractService.getStakeBandingAmount();
+      console.log('Required stake amount for appeal:', stakeAmount);
+
+      // Check RTK balance
+      const balance = await contractService.getRTKBalance(address!);
+      console.log('Current RTK balance:', balance);
+
+      if (parseFloat(balance) < parseFloat(stakeAmount)) {
+        toast({
+          title: "Insufficient Balance",
+          description: `You need ${stakeAmount} RTK tokens to submit an appeal. Current balance: ${balance} RTK`,
+          variant: "destructive"
+        });
+        return;
+      }
+
       // First approve tokens for appeal stake
-      await contractService.approveRTK(contractService['CONTRACT_ADDRESSES'].rewardManager, "100");
+      const approveTx = await contractService.approveRTK(
+        contractService['CONTRACT_ADDRESSES']?.rewardManager || '0x641D0Bf2936E2183443c60513b1094Ff5E39D42F',
+        stakeAmount
+      );
+      
+      toast({
+        title: "Approval Submitted",
+        description: "Approving tokens for appeal stake..."
+      });
+
+      await approveTx.wait();
       
       const tx = await contractService.ajukanBanding(parseInt(reportId));
       
@@ -155,11 +241,11 @@ const ReporterDashboard: React.FC = () => {
       });
 
       loadMyReports();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error submitting appeal:', error);
       toast({
         title: "Error", 
-        description: "Failed to submit appeal",
+        description: error.reason || "Failed to submit appeal",
         variant: "destructive"
       });
     } finally {
@@ -217,12 +303,25 @@ const ReporterDashboard: React.FC = () => {
                   </SelectTrigger>
                   <SelectContent>
                     {institutions.map((inst) => (
-                      <SelectItem key={inst.id} value={inst.id}>
-                        {inst.name}
+                      <SelectItem key={inst.id} value={inst.id} disabled={!inst.isRegistered}>
+                        <div className="flex items-center space-x-2">
+                          <span>{inst.name}</span>
+                          {!inst.isRegistered && (
+                            <div className="flex items-center space-x-1 text-red-500">
+                              <AlertCircle className="w-4 h-4" />
+                              <span className="text-xs">Not registered</span>
+                            </div>
+                          )}
+                        </div>
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {reportForm.institusiId && !isRegisteredReporter[reportForm.institusiId] && (
+                  <p className="text-sm text-red-600">
+                    You are not registered as a reporter for this institution. Contact the admin to be added.
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -249,7 +348,7 @@ const ReporterDashboard: React.FC = () => {
               <Button 
                 onClick={handleSubmitReport}
                 className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600"
-                disabled={!reportForm.institusiId || !reportForm.judul || !reportForm.deskripsi || loading}
+                disabled={!reportForm.institusiId || !reportForm.judul || !reportForm.deskripsi || loading || !isRegisteredReporter[reportForm.institusiId]}
               >
                 {loading ? 'Submitting...' : 'Submit Report'}
               </Button>
