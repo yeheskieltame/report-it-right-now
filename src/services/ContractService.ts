@@ -41,80 +41,6 @@ export class ContractService {
     }
   }
 
-  // Enhanced buatLaporan method with better validation
-  async buatLaporan(institusiId: number, judul: string, deskripsi: string): Promise<ethers.ContractTransactionResponse> {
-    console.log('Creating report with params:', { institusiId, judul, deskripsi });
-    
-    // Get signer address for validation
-    const signerAddress = await this.signer.getAddress();
-    console.log('Signer address:', signerAddress);
-    
-    // Validate inputs
-    if (!institusiId || institusiId <= 0) {
-      throw new Error('Invalid institution ID');
-    }
-    if (!judul || judul.trim() === '') {
-      throw new Error('Report title cannot be empty');
-    }
-    if (!deskripsi || deskripsi.trim() === '') {
-      throw new Error('Report description cannot be empty');
-    }
-    
-    try {
-      // Check if institution exists
-      const institutionCount = await this.getInstitusiCount();
-      if (institusiId > institutionCount) {
-        throw new Error(`Institution with ID ${institusiId} does not exist`);
-      }
-      
-      // Check if user is registered as reporter for this institution
-      const isRegistered = await this.isPelapor(institusiId, signerAddress);
-      if (!isRegistered) {
-        throw new Error(`You are not registered as a reporter for institution ${institusiId}`);
-      }
-      
-      console.log('All validations passed, creating contract instance...');
-      
-      const contract = new ethers.Contract(CONTRACT_ADDRESSES.user, USER_ABI, this.signer);
-      
-      // Try to estimate gas first to catch any revert reasons
-      try {
-        console.log('Estimating gas...');
-        const gasEstimate = await contract.buatLaporan.estimateGas(institusiId, judul, deskripsi);
-        console.log('Gas estimate successful:', gasEstimate.toString());
-      } catch (gasError: any) {
-        console.error('Gas estimation failed:', gasError);
-        if (gasError.reason) {
-          throw new Error(`Cannot create report: ${gasError.reason}`);
-        } else {
-          throw new Error('Cannot create report: Transaction would fail');
-        }
-      }
-      
-      console.log('Submitting transaction...');
-      return this.executeTransaction(
-        () => contract.buatLaporan(institusiId, judul, deskripsi),
-        'buatLaporan'
-      );
-      
-    } catch (error: any) {
-      console.error('Error in buatLaporan:', error);
-      throw error;
-    }
-  }
-
-  // Helper method for gas estimation
-  private async estimateGasWithRetry(contract: ethers.Contract, methodName: string, params: any[]) {
-    try {
-      const gasEstimate = await contract[methodName].estimateGas(...params);
-      console.log(`Gas estimate for ${methodName}:`, gasEstimate.toString());
-      return gasEstimate;
-    } catch (error) {
-      console.warn(`Gas estimation failed for ${methodName}, using default`);
-      return null;
-    }
-  }
-
   // RTK Token Contract Methods
   async getRTKBalance(address: string): Promise<string> {
     const contract = new ethers.Contract(CONTRACT_ADDRESSES.rtkToken, RTKT_TOKEN_ABI, this.provider);
@@ -302,17 +228,121 @@ export class ContractService {
     return await contract.updateReputation(validator, score);
   }
 
-  // User Contract Methods
+  // User Contract Methods - Enhanced buatLaporan with detailed validation
   async buatLaporan(institusiId: number, judul: string, deskripsi: string): Promise<ethers.ContractTransactionResponse> {
-    const contract = new ethers.Contract(CONTRACT_ADDRESSES.user, USER_ABI, this.signer);
+    console.log('=== STARTING buatLaporan PROCESS ===');
+    console.log('Input parameters:', { institusiId, judul, deskripsi });
+    console.log('Parameter types:', { 
+      institusiId: typeof institusiId, 
+      judul: typeof judul, 
+      deskripsi: typeof deskripsi 
+    });
     
-    // Estimate gas first
-    await this.estimateGasWithRetry(contract, 'buatLaporan', [institusiId, judul, deskripsi]);
+    // Get signer address for validation
+    const signerAddress = await this.signer.getAddress();
+    console.log('Signer address:', signerAddress);
     
-    return this.executeTransaction(
-      () => contract.buatLaporan(institusiId, judul, deskripsi),
-      'buatLaporan'
-    );
+    // Basic input validation
+    if (!institusiId || institusiId <= 0) {
+      throw new Error('Invalid institution ID - must be a positive number');
+    }
+    if (!judul || typeof judul !== 'string' || judul.trim() === '') {
+      throw new Error('Report title cannot be empty and must be a string');
+    }
+    if (!deskripsi || typeof deskripsi !== 'string' || deskripsi.trim() === '') {
+      throw new Error('Report description cannot be empty and must be a string');
+    }
+    
+    // Trim inputs to remove extra whitespace
+    const cleanJudul = judul.trim();
+    const cleanDeskripsi = deskripsi.trim();
+    
+    console.log('Cleaned inputs:', { institusiId, cleanJudul, cleanDeskripsi });
+    
+    try {
+      // Check if institution exists
+      console.log('Checking if institution exists...');
+      const institutionCount = await this.getInstitusiCount();
+      console.log('Total institutions:', institutionCount);
+      
+      if (institusiId > institutionCount) {
+        throw new Error(`Institution with ID ${institusiId} does not exist. Valid IDs: 1-${institutionCount}`);
+      }
+      
+      // Get institution data to verify it exists
+      try {
+        const [institutionName] = await this.getInstitusiData(institusiId);
+        console.log('Institution found:', institutionName);
+      } catch (error) {
+        console.error('Failed to get institution data:', error);
+        throw new Error(`Institution with ID ${institusiId} is not accessible`);
+      }
+      
+      // Check if user is registered as reporter for this institution
+      console.log('Checking reporter registration...');
+      const isRegistered = await this.isPelapor(institusiId, signerAddress);
+      console.log('Is registered as reporter:', isRegistered);
+      
+      if (!isRegistered) {
+        throw new Error(`Address ${signerAddress} is not registered as a reporter for institution ${institusiId}`);
+      }
+      
+      console.log('All validations passed, creating contract instance...');
+      const contract = new ethers.Contract(CONTRACT_ADDRESSES.user, USER_ABI, this.signer);
+      
+      // Log contract details
+      console.log('Contract address:', CONTRACT_ADDRESSES.user);
+      console.log('Contract interface functions:', Object.keys(contract.interface.functions));
+      
+      // Check if buatLaporan function exists in contract
+      if (!contract.interface.functions['buatLaporan(uint256,string,string)']) {
+        console.error('Available functions:', Object.keys(contract.interface.functions));
+        throw new Error('buatLaporan function not found in contract ABI');
+      }
+      
+      // Try to estimate gas with detailed logging
+      console.log('Attempting gas estimation...');
+      try {
+        const gasEstimate = await contract.buatLaporan.estimateGas(institusiId, cleanJudul, cleanDeskripsi);
+        console.log('Gas estimation successful:', gasEstimate.toString());
+      } catch (gasError: any) {
+        console.error('=== GAS ESTIMATION FAILED ===');
+        console.error('Gas error details:', gasError);
+        console.error('Gas error message:', gasError.message);
+        console.error('Gas error reason:', gasError.reason);
+        console.error('Gas error code:', gasError.code);
+        
+        // Try to get more specific error information
+        if (gasError.data) {
+          console.error('Gas error data:', gasError.data);
+        }
+        
+        throw new Error(`Gas estimation failed: ${gasError.reason || gasError.message || 'Unknown error during gas estimation'}`);
+      }
+      
+      console.log('Submitting transaction...');
+      const tx = await contract.buatLaporan(institusiId, cleanJudul, cleanDeskripsi);
+      console.log('Transaction submitted successfully:', tx.hash);
+      
+      return tx;
+      
+    } catch (error: any) {
+      console.error('=== ERROR IN buatLaporan ===');
+      console.error('Error details:', error);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      
+      // Re-throw with more context
+      if (error.message.includes('Gas estimation failed')) {
+        throw error; // Already has good context
+      } else if (error.reason) {
+        throw new Error(`Failed to create report: ${error.reason}`);
+      } else if (error.code === 'CALL_EXCEPTION') {
+        throw new Error(`Contract call failed: Please check if you are registered as a reporter for this institution and try again`);
+      } else {
+        throw new Error(`Failed to create report: ${error.message || 'Unknown error'}`);
+      }
+    }
   }
 
   async ajukanBanding(laporanId: number): Promise<ethers.ContractTransactionResponse> {

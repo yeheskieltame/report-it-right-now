@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -34,17 +35,22 @@ const ReporterDashboard: React.FC = () => {
     if (!contractService) return;
 
     try {
+      console.log('Loading institutions...');
       const count = await contractService.getInstitusiCount();
+      console.log('Institution count:', count);
+      
       const institutionsList = [];
       
       for (let i = 1; i <= count; i++) {
         try {
           const [nama] = await contractService.getInstitusiData(i);
+          console.log(`Institution ${i}:`, nama);
           
           // Check if user is registered as reporter for this institution
           let isReporter = false;
           if (address) {
             isReporter = await contractService.isPelapor(i, address);
+            console.log(`User ${address} is reporter for institution ${i}:`, isReporter);
           }
           
           institutionsList.push({ 
@@ -58,10 +64,11 @@ const ReporterDashboard: React.FC = () => {
             [i.toString()]: isReporter
           }));
         } catch (error) {
-          console.log(`Institution ${i} not found`);
+          console.log(`Institution ${i} not found:`, error);
         }
       }
       
+      console.log('Final institutions list:', institutionsList);
       setInstitutions(institutionsList);
     } catch (error) {
       console.error('Error loading institutions:', error);
@@ -108,23 +115,31 @@ const ReporterDashboard: React.FC = () => {
   const validateReportSubmission = async (institusiId: string) => {
     if (!contractService || !address || !institusiId) return false;
     
+    console.log('Validating report submission for institution:', institusiId);
     setValidationStatus(prev => ({ ...prev, [institusiId]: 'checking' }));
     
     try {
+      const institusiIdNum = parseInt(institusiId);
+      
       // Check if institution exists
       const institutionCount = await contractService.getInstitusiCount();
-      if (parseInt(institusiId) > institutionCount) {
+      console.log('Institution count for validation:', institutionCount);
+      
+      if (institusiIdNum > institutionCount || institusiIdNum <= 0) {
+        console.log('Invalid institution ID:', institusiIdNum);
         setValidationStatus(prev => ({ ...prev, [institusiId]: 'invalid' }));
         toast({
           title: "Invalid Institution",
-          description: "Selected institution does not exist",
+          description: `Invalid institution ID: ${institusiIdNum}. Valid range: 1-${institutionCount}`,
           variant: "destructive"
         });
         return false;
       }
       
       // Check if user is registered as reporter
-      const isReporter = await contractService.isPelapor(parseInt(institusiId), address);
+      const isReporter = await contractService.isPelapor(institusiIdNum, address);
+      console.log('Is user registered as reporter:', isReporter);
+      
       if (!isReporter) {
         setValidationStatus(prev => ({ ...prev, [institusiId]: 'invalid' }));
         toast({
@@ -140,38 +155,98 @@ const ReporterDashboard: React.FC = () => {
     } catch (error) {
       console.error('Validation error:', error);
       setValidationStatus(prev => ({ ...prev, [institusiId]: 'invalid' }));
+      toast({
+        title: "Validation Error",
+        description: "Failed to validate reporter status",
+        variant: "destructive"
+      });
       return false;
     }
   };
 
   const handleSubmitReport = async () => {
-    if (!contractService || !reportForm.institusiId || !reportForm.judul || !reportForm.deskripsi) {
+    console.log('=== SUBMIT REPORT INITIATED ===');
+    console.log('Form data:', reportForm);
+    
+    // Basic form validation
+    if (!reportForm.institusiId) {
+      console.log('Missing institution ID');
       toast({
         title: "Error",
-        description: "Please fill all fields",
+        description: "Please select an institution",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    if (!reportForm.judul || !reportForm.judul.trim()) {
+      console.log('Missing or empty title');
+      toast({
+        title: "Error",
+        description: "Please enter a report title",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    if (!reportForm.deskripsi || !reportForm.deskripsi.trim()) {
+      console.log('Missing or empty description');
+      toast({
+        title: "Error",
+        description: "Please enter a report description",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!contractService) {
+      console.log('Contract service not available');
+      toast({
+        title: "Error",
+        description: "Contract service not available",
         variant: "destructive"
       });
       return;
     }
 
     // Validate before submission
+    console.log('Validating submission...');
     const isValid = await validateReportSubmission(reportForm.institusiId);
     if (!isValid) {
+      console.log('Validation failed');
       return;
     }
 
     setLoading(true);
+    
     try {
-      console.log('Submitting report with data:', {
-        institusiId: parseInt(reportForm.institusiId),
-        judul: reportForm.judul.trim(),
-        deskripsi: reportForm.deskripsi.trim()
+      const institusiIdNum = parseInt(reportForm.institusiId);
+      const cleanTitle = reportForm.judul.trim();
+      const cleanDescription = reportForm.deskripsi.trim();
+      
+      console.log('Submitting report with cleaned data:', {
+        institusiId: institusiIdNum,
+        judul: cleanTitle,
+        deskripsi: cleanDescription
       });
+      
+      // Additional validation
+      if (isNaN(institusiIdNum) || institusiIdNum <= 0) {
+        throw new Error('Invalid institution ID format');
+      }
+      
+      if (cleanTitle.length === 0) {
+        throw new Error('Title cannot be empty');
+      }
+      
+      if (cleanDescription.length === 0) {
+        throw new Error('Description cannot be empty');
+      }
 
       const tx = await contractService.buatLaporan(
-        parseInt(reportForm.institusiId),
-        reportForm.judul.trim(),
-        reportForm.deskripsi.trim()
+        institusiIdNum,
+        cleanTitle,
+        cleanDescription
       );
       
       toast({
@@ -188,19 +263,37 @@ const ReporterDashboard: React.FC = () => {
         description: "Report submitted successfully!"
       });
 
+      // Reset form
       setReportForm({
         institusiId: '',
         judul: '',
         deskripsi: ''
       });
 
+      // Clear validation status
+      setValidationStatus({});
+
+      // Reload reports
       loadMyReports();
+      
     } catch (error: any) {
-      console.error('Error submitting report:', error);
+      console.error('=== ERROR SUBMITTING REPORT ===');
+      console.error('Error details:', error);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
       
       let errorMessage = "Failed to submit report";
+      
       if (error.message) {
-        errorMessage = error.message;
+        if (error.message.includes('not registered as a reporter')) {
+          errorMessage = "You are not registered as a reporter for this institution";
+        } else if (error.message.includes('Institution') && error.message.includes('does not exist')) {
+          errorMessage = "Selected institution does not exist";
+        } else if (error.message.includes('Gas estimation failed')) {
+          errorMessage = "Transaction validation failed. Please check your inputs and try again.";
+        } else {
+          errorMessage = error.message;
+        }
       }
       
       toast({
@@ -237,7 +330,7 @@ const ReporterDashboard: React.FC = () => {
 
       // First approve tokens for appeal stake
       const approveTx = await contractService.approveRTK(
-        contractService['CONTRACT_ADDRESSES']?.rewardManager || '0x641D0Bf2936E2183443c60513b1094Ff5E39D42F',
+        CONTRACT_ADDRESSES.rewardManager,
         stakeAmount
       );
       
@@ -304,6 +397,16 @@ const ReporterDashboard: React.FC = () => {
     }
   };
 
+  // Form validation helpers
+  const isFormValid = () => {
+    return (
+      reportForm.institusiId && 
+      reportForm.judul.trim().length > 0 && 
+      reportForm.deskripsi.trim().length > 0 && 
+      validationStatus[reportForm.institusiId] === 'valid'
+    );
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center space-x-3">
@@ -329,13 +432,16 @@ const ReporterDashboard: React.FC = () => {
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="institution">Select Institution</Label>
+                <Label htmlFor="institution">Select Institution *</Label>
                 <div className="flex items-center space-x-2">
                   <Select 
                     value={reportForm.institusiId} 
                     onValueChange={(value) => {
+                      console.log('Institution selected:', value);
                       setReportForm({...reportForm, institusiId: value});
-                      validateReportSubmission(value);
+                      if (value) {
+                        validateReportSubmission(value);
+                      }
                     }}
                   >
                     <SelectTrigger>
@@ -359,43 +465,68 @@ const ReporterDashboard: React.FC = () => {
                   </Select>
                   {reportForm.institusiId && getValidationIcon(reportForm.institusiId)}
                 </div>
+                {reportForm.institusiId && validationStatus[reportForm.institusiId] === 'invalid' && (
+                  <p className="text-sm text-red-500">You must be registered as a reporter for this institution</p>
+                )}
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="title">Report Title</Label>
+                <Label htmlFor="title">Report Title *</Label>
                 <Input
                   id="title"
                   placeholder="Enter report title"
                   value={reportForm.judul}
-                  onChange={(e) => setReportForm({...reportForm, judul: e.target.value})}
+                  onChange={(e) => {
+                    console.log('Title changed:', e.target.value);
+                    setReportForm({...reportForm, judul: e.target.value});
+                  }}
                   maxLength={100}
+                  className={reportForm.judul.trim().length === 0 && reportForm.judul.length > 0 ? 'border-red-500' : ''}
                 />
-                <p className="text-xs text-gray-500">{reportForm.judul.length}/100 characters</p>
+                <div className="flex justify-between">
+                  <p className="text-xs text-gray-500">{reportForm.judul.length}/100 characters</p>
+                  {reportForm.judul.trim().length === 0 && reportForm.judul.length > 0 && (
+                    <p className="text-xs text-red-500">Title cannot be empty</p>
+                  )}
+                </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="description">Report Description</Label>
+                <Label htmlFor="description">Report Description *</Label>
                 <Textarea
                   id="description"
                   placeholder="Describe the incident or issue in detail..."
                   rows={6}
                   value={reportForm.deskripsi}
-                  onChange={(e) => setReportForm({...reportForm, deskripsi: e.target.value})}
+                  onChange={(e) => {
+                    console.log('Description changed:', e.target.value);
+                    setReportForm({...reportForm, deskripsi: e.target.value});
+                  }}
                   maxLength={500}
+                  className={reportForm.deskripsi.trim().length === 0 && reportForm.deskripsi.length > 0 ? 'border-red-500' : ''}
                 />
-                <p className="text-xs text-gray-500">{reportForm.deskripsi.length}/500 characters</p>
+                <div className="flex justify-between">
+                  <p className="text-xs text-gray-500">{reportForm.deskripsi.length}/500 characters</p>
+                  {reportForm.deskripsi.trim().length === 0 && reportForm.deskripsi.length > 0 && (
+                    <p className="text-xs text-red-500">Description cannot be empty</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-semibold text-sm mb-2">Before submitting:</h4>
+                <ul className="text-xs text-gray-600 space-y-1">
+                  <li>• Ensure you are registered as a reporter for the selected institution</li>
+                  <li>• Provide a clear and descriptive title</li>
+                  <li>• Include detailed information in the description</li>
+                  <li>• Double-check all information before submitting</li>
+                </ul>
               </div>
 
               <Button 
                 onClick={handleSubmitReport}
                 className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600"
-                disabled={
-                  !reportForm.institusiId || 
-                  !reportForm.judul.trim() || 
-                  !reportForm.deskripsi.trim() || 
-                  loading || 
-                  validationStatus[reportForm.institusiId] !== 'valid'
-                }
+                disabled={!isFormValid() || loading}
               >
                 {loading ? 'Submitting...' : 'Submit Report'}
               </Button>
