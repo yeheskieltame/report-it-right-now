@@ -1,3 +1,4 @@
+
 import { ethers } from 'ethers';
 import { 
   CONTRACT_ADDRESSES, 
@@ -37,6 +38,178 @@ export class ContractService {
       }
       
       throw error;
+    }
+  }
+
+  // New method to check if User contract is properly initialized
+  async checkUserContractInitialization(): Promise<boolean> {
+    try {
+      const contract = new ethers.Contract(CONTRACT_ADDRESSES.user, USER_ABI, this.provider);
+      
+      // Try to call a view function that requires initialization
+      const institusiContract = await contract.institusiContract();
+      const rewardManager = await contract.rewardManager();
+      const validatorContract = await contract.validatorContract();
+      const rtkToken = await contract.rtkToken();
+      
+      console.log('User contract initialization status:', {
+        institusiContract,
+        rewardManager,
+        validatorContract,
+        rtkToken
+      });
+      
+      // Check if all required contracts are set (not zero address)
+      const isInitialized = institusiContract !== ethers.ZeroAddress && 
+                           rewardManager !== ethers.ZeroAddress && 
+                           validatorContract !== ethers.ZeroAddress && 
+                           rtkToken !== ethers.ZeroAddress;
+      
+      console.log('User contract is initialized:', isInitialized);
+      return isInitialized;
+    } catch (error) {
+      console.error('Error checking User contract initialization:', error);
+      return false;
+    }
+  }
+
+  // New method to initialize User contract if needed
+  async initializeUserContract(): Promise<void> {
+    console.log('Initializing User contract...');
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.user, USER_ABI, this.signer);
+    
+    try {
+      const tx = await contract.setContracts(
+        CONTRACT_ADDRESSES.institusi,
+        CONTRACT_ADDRESSES.rewardManager,
+        CONTRACT_ADDRESSES.validator,
+        CONTRACT_ADDRESSES.rtkToken
+      );
+      
+      console.log('User contract initialization transaction:', tx.hash);
+      await tx.wait();
+      console.log('User contract initialized successfully');
+    } catch (error) {
+      console.error('Error initializing User contract:', error);
+      throw error;
+    }
+  }
+
+  // Enhanced buatLaporan with initialization check and fallback gas estimation
+  async buatLaporan(institusiId: number, judul: string, deskripsi: string): Promise<ethers.ContractTransactionResponse> {
+    console.log('=== STARTING buatLaporan PROCESS ===');
+    console.log('Input parameters:', { institusiId, judul, deskripsi });
+    
+    // Get signer address for validation
+    const signerAddress = await this.signer.getAddress();
+    console.log('Signer address:', signerAddress);
+    
+    // Basic input validation
+    if (!institusiId || institusiId <= 0) {
+      throw new Error('Invalid institution ID - must be a positive number');
+    }
+    if (!judul || typeof judul !== 'string' || judul.trim() === '') {
+      throw new Error('Report title cannot be empty and must be a string');
+    }
+    if (!deskripsi || typeof deskripsi !== 'string' || deskripsi.trim() === '') {
+      throw new Error('Report description cannot be empty and must be a string');
+    }
+    
+    // Trim inputs to remove extra whitespace
+    const cleanJudul = judul.trim();
+    const cleanDeskripsi = deskripsi.trim();
+    
+    console.log('Cleaned inputs:', { institusiId, cleanJudul, cleanDeskripsi });
+    
+    try {
+      // Check User contract initialization first
+      console.log('Checking User contract initialization...');
+      const isUserInitialized = await this.checkUserContractInitialization();
+      
+      if (!isUserInitialized) {
+        console.log('User contract not initialized, attempting to initialize...');
+        try {
+          await this.initializeUserContract();
+        } catch (initError: any) {
+          console.error('Failed to initialize User contract:', initError);
+          throw new Error(`User contract initialization failed: ${initError.message || 'Unknown error'}`);
+        }
+      }
+      
+      // Check if institution exists
+      console.log('Checking if institution exists...');
+      const institutionCount = await this.getInstitusiCount();
+      console.log('Total institutions:', institutionCount);
+      
+      if (institusiId > institutionCount) {
+        throw new Error(`Institution with ID ${institusiId} does not exist. Valid IDs: 1-${institutionCount}`);
+      }
+      
+      // Get institution data to verify it exists
+      try {
+        const [institutionName] = await this.getInstitusiData(institusiId);
+        console.log('Institution found:', institutionName);
+      } catch (error) {
+        console.error('Failed to get institution data:', error);
+        throw new Error(`Institution with ID ${institusiId} is not accessible`);
+      }
+      
+      // Check if user is registered as reporter for this institution
+      console.log('Checking reporter registration...');
+      const isRegistered = await this.isPelapor(institusiId, signerAddress);
+      console.log('Is registered as reporter:', isRegistered);
+      
+      if (!isRegistered) {
+        throw new Error(`Address ${signerAddress} is not registered as a reporter for institution ${institusiId}`);
+      }
+      
+      console.log('All validations passed, creating contract instance...');
+      const contract = new ethers.Contract(CONTRACT_ADDRESSES.user, USER_ABI, this.signer);
+      
+      // Log contract details safely
+      console.log('Contract address:', CONTRACT_ADDRESSES.user);
+      
+      // Enhanced gas estimation with fallback
+      console.log('Attempting gas estimation with fallback...');
+      let gasLimit: bigint | undefined;
+      
+      try {
+        const gasEstimate = await contract.buatLaporan.estimateGas(institusiId, cleanJudul, cleanDeskripsi);
+        gasLimit = gasEstimate + (gasEstimate / 10n); // Add 10% buffer
+        console.log('Gas estimation successful:', gasLimit.toString());
+      } catch (gasError: any) {
+        console.warn('Gas estimation failed, using fallback gas limit');
+        console.error('Gas error details:', gasError);
+        
+        // Use a reasonable fallback gas limit for buatLaporan
+        gasLimit = BigInt(300000); // 300k gas limit as fallback
+        console.log('Using fallback gas limit:', gasLimit.toString());
+      }
+      
+      console.log('Submitting transaction with gas limit:', gasLimit.toString());
+      
+      // Submit transaction with gas limit
+      const tx = await contract.buatLaporan(institusiId, cleanJudul, cleanDeskripsi, {
+        gasLimit: gasLimit
+      });
+      
+      console.log('Transaction submitted successfully:', tx.hash);
+      return tx;
+      
+    } catch (error: any) {
+      console.error('=== ERROR IN buatLaporan ===');
+      console.error('Error details:', error);
+      
+      // Re-throw with more context
+      if (error.message.includes('User contract initialization failed')) {
+        throw error; // Already has good context
+      } else if (error.reason) {
+        throw new Error(`Failed to create report: ${error.reason}`);
+      } else if (error.code === 'CALL_EXCEPTION') {
+        throw new Error(`Contract call failed: Please check if you are registered as a reporter for this institution and ensure all contracts are properly initialized`);
+      } else {
+        throw new Error(`Failed to create report: ${error.message || 'Unknown error'}`);
+      }
     }
   }
 
@@ -227,101 +400,6 @@ export class ContractService {
     return await contract.updateReputation(validator, score);
   }
 
-  // User Contract Methods - Fixed buatLaporan function
-  async buatLaporan(institusiId: number, judul: string, deskripsi: string): Promise<ethers.ContractTransactionResponse> {
-    console.log('=== STARTING buatLaporan PROCESS ===');
-    console.log('Input parameters:', { institusiId, judul, deskripsi });
-    
-    // Get signer address for validation
-    const signerAddress = await this.signer.getAddress();
-    console.log('Signer address:', signerAddress);
-    
-    // Basic input validation
-    if (!institusiId || institusiId <= 0) {
-      throw new Error('Invalid institution ID - must be a positive number');
-    }
-    if (!judul || typeof judul !== 'string' || judul.trim() === '') {
-      throw new Error('Report title cannot be empty and must be a string');
-    }
-    if (!deskripsi || typeof deskripsi !== 'string' || deskripsi.trim() === '') {
-      throw new Error('Report description cannot be empty and must be a string');
-    }
-    
-    // Trim inputs to remove extra whitespace
-    const cleanJudul = judul.trim();
-    const cleanDeskripsi = deskripsi.trim();
-    
-    console.log('Cleaned inputs:', { institusiId, cleanJudul, cleanDeskripsi });
-    
-    try {
-      // Check if institution exists
-      console.log('Checking if institution exists...');
-      const institutionCount = await this.getInstitusiCount();
-      console.log('Total institutions:', institutionCount);
-      
-      if (institusiId > institutionCount) {
-        throw new Error(`Institution with ID ${institusiId} does not exist. Valid IDs: 1-${institutionCount}`);
-      }
-      
-      // Get institution data to verify it exists
-      try {
-        const [institutionName] = await this.getInstitusiData(institusiId);
-        console.log('Institution found:', institutionName);
-      } catch (error) {
-        console.error('Failed to get institution data:', error);
-        throw new Error(`Institution with ID ${institusiId} is not accessible`);
-      }
-      
-      // Check if user is registered as reporter for this institution
-      console.log('Checking reporter registration...');
-      const isRegistered = await this.isPelapor(institusiId, signerAddress);
-      console.log('Is registered as reporter:', isRegistered);
-      
-      if (!isRegistered) {
-        throw new Error(`Address ${signerAddress} is not registered as a reporter for institution ${institusiId}`);
-      }
-      
-      console.log('All validations passed, creating contract instance...');
-      const contract = new ethers.Contract(CONTRACT_ADDRESSES.user, USER_ABI, this.signer);
-      
-      // Log contract details safely
-      console.log('Contract address:', CONTRACT_ADDRESSES.user);
-      
-      // Try to estimate gas with detailed logging
-      console.log('Attempting gas estimation...');
-      try {
-        const gasEstimate = await contract.buatLaporan.estimateGas(institusiId, cleanJudul, cleanDeskripsi);
-        console.log('Gas estimation successful:', gasEstimate.toString());
-      } catch (gasError: any) {
-        console.error('=== GAS ESTIMATION FAILED ===');
-        console.error('Gas error details:', gasError);
-        
-        throw new Error(`Gas estimation failed: ${gasError.reason || gasError.message || 'Unknown error during gas estimation'}`);
-      }
-      
-      console.log('Submitting transaction...');
-      const tx = await contract.buatLaporan(institusiId, cleanJudul, cleanDeskripsi);
-      console.log('Transaction submitted successfully:', tx.hash);
-      
-      return tx;
-      
-    } catch (error: any) {
-      console.error('=== ERROR IN buatLaporan ===');
-      console.error('Error details:', error);
-      
-      // Re-throw with more context
-      if (error.message.includes('Gas estimation failed')) {
-        throw error; // Already has good context
-      } else if (error.reason) {
-        throw new Error(`Failed to create report: ${error.reason}`);
-      } else if (error.code === 'CALL_EXCEPTION') {
-        throw new Error(`Contract call failed: Please check if you are registered as a reporter for this institution and try again`);
-      } else {
-        throw new Error(`Failed to create report: ${error.message || 'Unknown error'}`);
-      }
-    }
-  }
-
   async ajukanBanding(laporanId: number): Promise<ethers.ContractTransactionResponse> {
     const contract = new ethers.Contract(CONTRACT_ADDRESSES.user, USER_ABI, this.signer);
     
@@ -400,6 +478,7 @@ export class ContractService {
     return await contract.setContracts(institusiContract, userContract);
   }
 
+  // Enhanced initialization method that includes User contract setup
   async initializeContracts(): Promise<void> {
     try {
       // Set validator contract in institusi contract
@@ -416,6 +495,10 @@ export class ContractService {
       console.log('Setting reward manager contracts...');
       const setRewardTx = await this.setRewardManagerContracts(CONTRACT_ADDRESSES.institusi, CONTRACT_ADDRESSES.user);
       await setRewardTx.wait();
+      
+      // Initialize User contract with all required addresses
+      console.log('Initializing User contract...');
+      await this.initializeUserContract();
       
       console.log('All contracts initialized successfully');
     } catch (error) {

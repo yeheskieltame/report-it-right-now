@@ -345,6 +345,46 @@ export const USER_ABI = [
     "type": "function"
   },
   {
+    "inputs": [
+      {"internalType": "address", "name": "_institusi", "type": "address"},
+      {"internalType": "address", "name": "_rewardManager", "type": "address"},
+      {"internalType": "address", "name": "_validator", "type": "address"},
+      {"internalType": "address", "name": "_rtkToken", "type": "address"}
+    ],
+    "name": "setContracts",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "institusiContract",
+    "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "rewardManager",
+    "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "validatorContract",
+    "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "rtkToken",
+    "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [{"internalType": "uint256", "name": "laporanId", "type": "uint256"}],
     "name": "ajukanBanding",
     "outputs": [],
