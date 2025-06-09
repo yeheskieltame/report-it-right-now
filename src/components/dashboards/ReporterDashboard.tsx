@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { FileText, Plus, History, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 import { useWallet } from '../../context/WalletContext';
 import { useToast } from '@/hooks/use-toast';
+import { CONTRACT_ADDRESSES } from '../../config/contracts';
 
 const ReporterDashboard: React.FC = () => {
   const { contractService, address } = useWallet();
