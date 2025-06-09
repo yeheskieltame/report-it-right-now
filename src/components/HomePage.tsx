@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useWallet } from '../context/WalletContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -423,6 +422,43 @@ const HomePage: React.FC = () => {
             </Card>
           </div>
         </div>
+
+        {/* Development Tools Section */}
+        {isConnected && (
+          <Card className="mb-12 bg-gradient-to-r from-slate-100 to-gray-100 border-2 border-dashed border-gray-300">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-gray-700">
+                <Shield className="w-5 h-5" />
+                Development & Analysis Tools
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start hover:bg-blue-50 border-blue-200"
+                  onClick={() => window.location.hash = '#analysis'}
+                >
+                  <FileText className="w-4 h-4 mr-2" />
+                  Analisis Struct Validasi
+                  <Badge variant="secondary" className="ml-auto">New</Badge>
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start hover:bg-green-50 border-green-200"
+                  onClick={() => window.location.hash = '#test'}
+                >
+                  <Shield className="w-4 h-4 mr-2" />
+                  Test Validation Display
+                </Button>
+              </div>
+              <p className="text-sm text-gray-600 mt-3">
+                Tools untuk menguji dan menganalisis data validasi dari blockchain dengan fokus pada struct Validasi (validator, isValid, deskripsi).
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
       </div>
 
       <CreateInstitutionModal 

@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Building2, Users, FileText, Scale, AlertCircle, Settings } from 'lucide-react';
+import { Building2, Users, FileText, Scale, AlertCircle, Settings, CheckCircle, XCircle, Bug, Shield, Clock } from 'lucide-react';
 import { useWallet } from '../../context/WalletContext';
 import { toast } from 'sonner';
 
@@ -34,8 +34,147 @@ interface ReportData {
     description: string;
     validator: string;
     validationTimestamp: number;
+    hasDataIssues?: boolean;
+    errorType?: string;
   };
 }
+
+// Enhanced Validation Detail Card Component
+const ValidationDetailCard: React.FC<{ 
+  validationResult: ReportData['validationResult'], 
+  reportId: number 
+}> = ({ validationResult, reportId }) => {
+  if (!validationResult) return null;
+
+  const getValidatorDisplayText = (validator: string) => {
+    if (!validator || validator === '0x0000000000000000000000000000000000000000') {
+      return 'Validator tidak tersedia';
+    }
+    if (validator.includes('rusak') || validator.includes('unavailable') || validator.includes('corrupted')) {
+      return validator;
+    }
+    if (validator.length === 42 && validator.startsWith('0x')) {
+      return `${validator.substring(0, 6)}...${validator.substring(38)}`;
+    }
+    return validator;
+  };
+
+  const getTimestampDisplay = (timestamp: number) => {
+    if (!timestamp || timestamp === 0) {
+      return 'Waktu tidak tersedia';
+    }
+    try {
+      return new Date(timestamp * 1000).toLocaleString('id-ID');
+    } catch {
+      return 'Format waktu tidak valid';
+    }
+  };
+
+  const hasDataIssues = validationResult.hasDataIssues || 
+    validationResult.validator.includes('rusak') || 
+    validationResult.validator.includes('overflow') ||
+    validationResult.description.includes('rusak') ||
+    validationResult.description.includes('overflow') ||
+    validationResult.description.includes('encoding');
+
+  return (
+    <div className={`p-4 rounded-lg border-l-4 ${
+      hasDataIssues 
+        ? 'bg-amber-50 border-amber-400' 
+        : validationResult.isValid 
+          ? 'bg-green-50 border-green-400' 
+          : 'bg-red-50 border-red-400'
+    }`}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          {hasDataIssues ? (
+            <Bug className="w-4 h-4 text-amber-600" />
+          ) : validationResult.isValid ? (
+            <CheckCircle className="w-4 h-4 text-green-600" />
+          ) : (
+            <XCircle className="w-4 h-4 text-red-600" />
+          )}
+          <h5 className="font-semibold text-sm">Detail Validasi</h5>
+        </div>
+        <span className={`text-xs px-2 py-1 rounded ${
+          hasDataIssues 
+            ? 'bg-amber-100 text-amber-800' 
+            : validationResult.isValid 
+              ? 'bg-green-100 text-green-800' 
+              : 'bg-red-100 text-red-800'
+        }`}>
+          {hasDataIssues ? 'DATA ISSUES' : validationResult.isValid ? 'VALID' : 'INVALID'}
+        </span>
+      </div>
+
+      {hasDataIssues && (
+        <div className="bg-amber-100 border border-amber-300 rounded-lg p-3 mb-3">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+            <div className="text-sm text-amber-800">
+              <strong>Peringatan:</strong> Terdapat masalah dalam decoding data validasi dari blockchain. 
+              Laporan tetap valid, namun detail lengkap tidak dapat ditampilkan dengan sempurna.
+            </div>
+          </div>
+        </div>
+      )}
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+        <div className="space-y-3">
+          <div className="flex items-start gap-2">
+            <Shield className="w-4 h-4 text-gray-600 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <span className="font-medium text-gray-600 block mb-1">Validator:</span>
+              <span className={`font-mono break-all ${
+                validationResult.validator.includes('rusak') || validationResult.validator.includes('unavailable')
+                  ? 'text-amber-700 bg-amber-50 px-2 py-1 rounded' 
+                  : 'text-gray-800'
+              }`}>
+                {getValidatorDisplayText(validationResult.validator)}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-2">
+            <Clock className="w-4 h-4 text-gray-600 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <span className="font-medium text-gray-600 block mb-1">Waktu Validasi:</span>
+              <span className="text-gray-800">
+                {getTimestampDisplay(validationResult.validationTimestamp)}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-start gap-2">
+            <FileText className="w-4 h-4 text-gray-600 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <span className="font-medium text-gray-600 block mb-1">Catatan Validasi:</span>
+              <div className={`p-3 rounded-lg border text-sm ${
+                validationResult.description.includes('rusak') || 
+                validationResult.description.includes('overflow') ||
+                validationResult.description.includes('encoding')
+                  ? 'bg-amber-50 border-amber-200 text-amber-800' 
+                  : 'bg-gray-50 border-gray-200 text-gray-800'
+              }`}>
+                {validationResult.description}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {validationResult.errorType && (
+        <div className="mt-3 bg-red-50 border border-red-200 rounded-lg p-3">
+          <p className="text-sm text-red-800">
+            <strong>Error Type:</strong> {validationResult.errorType}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const AdminDashboard: React.FC = () => {
   const { contractService, address } = useWallet();
@@ -94,15 +233,33 @@ const AdminDashboard: React.FC = () => {
       return `Laporan ${reportId} telah divalidasi - Detail tidak tersedia`;
     }
     
-    const desc = String(deskripsi);
+    const desc = String(deskripsi).trim();
     
-    // Check for corruption indicators
-    if (desc.includes('overflow') || desc.includes('0x') || desc.length > 500) {
-      console.warn(`Corrupted description detected for report ${reportId}:`, desc);
-      return `Laporan ${reportId} telah divalidasi (detail rusak karena masalah encoding)`;
+    // Check for empty descriptions
+    if (desc.length === 0) {
+      return `Laporan ${reportId} telah divalidasi - Deskripsi kosong`;
     }
     
-    // Return cleaned description
+    // Check for corruption indicators
+    if (desc.includes('encoding error') || desc.includes('hex encoding error')) {
+      return `Laporan ${reportId} telah divalidasi (masalah encoding data)`;
+    }
+    
+    if (desc.includes('tidak dapat dibaca') || desc.includes('tidak dapat mengambil detail')) {
+      return `Laporan ${reportId} telah divalidasi (detail tidak dapat diambil dari kontrak)`;
+    }
+    
+    if (desc.includes('ABI overflow')) {
+      return `Laporan ${reportId} telah divalidasi (data rusak karena ABI overflow)`;
+    }
+    
+    // Check for hex strings or other corruption
+    if (desc.includes('0x') || desc.includes('overflow')) {
+      console.warn(`Corrupted description detected for report ${reportId}:`, desc);
+      return `Laporan ${reportId} telah divalidasi (data rusak)`;
+    }
+    
+    // Return cleaned description, truncated if too long
     return desc.length > 200 ? desc.substring(0, 197) + '...' : desc;
   };
 
@@ -111,17 +268,23 @@ const AdminDashboard: React.FC = () => {
       return 'Validator tidak diketahui';
     }
     
-    const addr = String(validator);
+    const addr = String(validator).toLowerCase();
     
-    // Check for known corrupted addresses
-    if (addr === '0x0000000000000000000000000000000000000060' || 
-        addr === '0x0000000000000000000000000000000000000000' ||
-        addr.length !== 42 || 
-        !addr.startsWith('0x')) {
-      console.warn(`Corrupted validator address detected:`, addr);
-      return 'Alamat validator rusak';
+    // Check for null address
+    if (addr === '0x0000000000000000000000000000000000000000') {
+      return 'Alamat validator tidak tersedia';
     }
     
+    // Check for other known corrupted addresses (the specific one we've been seeing)
+    if (addr === '0x0000000000000000000000000000000000000060' || 
+        addr.length !== 42 || 
+        !addr.startsWith('0x') ||
+        !/^0x[a-f0-9]{40}$/.test(addr)) {
+      console.warn(`Invalid validator address detected:`, addr);
+      return 'Alamat validator rusak (ABI overflow)';
+    }
+    
+    // Return properly formatted address
     return addr;
   };
 
@@ -138,14 +301,22 @@ const AdminDashboard: React.FC = () => {
   };
 
   const getValidationErrorMessage = (error: any, reportId: number): string => {
-    if (error?.message?.includes('overflow')) {
+    const errorMsg = error?.message || '';
+    
+    if (errorMsg.includes('has not been validated')) {
+      return `Laporan ${reportId} belum divalidasi`;
+    } else if (errorMsg.includes('Failed to get validation result')) {
+      return `Laporan ${reportId} - Gagal mengambil hasil validasi dari kontrak`;
+    } else if (errorMsg.includes('Contract error')) {
+      return `Laporan ${reportId} - Error kontrak saat mengambil data validasi`;
+    } else if (errorMsg.includes('overflow')) {
       return `Laporan ${reportId} - Data validasi rusak karena ABI overflow error`;
-    } else if (error?.message?.includes('ABI')) {
+    } else if (errorMsg.includes('ABI')) {
       return `Laporan ${reportId} - Kesalahan decoding ABI pada data validasi`;
-    } else if (error?.message?.includes('revert')) {
+    } else if (errorMsg.includes('revert')) {
       return `Laporan ${reportId} - Smart contract mengembalikan error`;
     } else {
-      return `Laporan ${reportId} - Error tidak diketahui: ${error?.message || 'Unknown error'}`;
+      return `Laporan ${reportId} - Error: ${errorMsg || 'Unknown error'}`;
     }
   };
 
@@ -216,7 +387,7 @@ const AdminDashboard: React.FC = () => {
                 // Get validation results from validator contract with enhanced error handling
                 try {
                   // First try to get the validation result using the enhanced method
-                  const validationResult = await contractService.getHasilValidasi(i);
+                  const validationResult = await contractService.getEnhancedValidationResult(i);
                   console.log(`Report ${i} validation result:`, validationResult);
                   
                   // If debugging is needed (for corrupted data), run debug analysis
@@ -228,11 +399,21 @@ const AdminDashboard: React.FC = () => {
                   }
                   
                   // Safely extract validation data with robust fallbacks
+                  const hasDataIssues = !validationResult || 
+                      validationResult.validator === '0x0000000000000000000000000000000000000060' ||
+                      (validationResult.deskripsi && validationResult.deskripsi.includes('overflow')) ||
+                      validationResult.validator?.includes('rusak') ||
+                      validationResult.validator?.includes('unavailable') ||
+                      validationResult.deskripsi?.includes('rusak') ||
+                      validationResult.deskripsi?.includes('encoding');
+
                   const validationData = {
                     isValid: Boolean(validationResult?.isValid ?? true), // Default to valid since it's validated
                     description: cleanValidationDescription(validationResult?.deskripsi, i),
                     validator: cleanValidatorAddress(validationResult?.validator),
-                    validationTimestamp: cleanTimestamp(validationResult?.timestamp)
+                    validationTimestamp: cleanTimestamp(validationResult?.timestamp),
+                    hasDataIssues: hasDataIssues,
+                    errorType: hasDataIssues ? 'ABI_DECODING_ISSUE' : undefined
                   };
                   
                   // Enhance report data with validation details
@@ -257,7 +438,9 @@ const AdminDashboard: React.FC = () => {
                     isValid: true, // We know it's validated from isLaporanSudahDivalidasi
                     description: getValidationErrorMessage(validationError, i),
                     validator: 'Data unavailable due to ABI corruption',
-                    validationTimestamp: 0
+                    validationTimestamp: 0,
+                    hasDataIssues: true,
+                    errorType: 'VALIDATION_FETCH_ERROR'
                   };
                   
                   const reportWithFallback = {
@@ -687,68 +870,9 @@ const AdminDashboard: React.FC = () => {
                         <p className="text-sm text-gray-700">{report.description}</p>
                       </div>
 
-                      {/* Validation Result Details */}
+                      {/* Enhanced Validation Result Details */}
                       {report.validationResult && (
-                        <div className={`p-4 rounded-lg border-l-4 ${
-                          report.validationResult.isValid 
-                            ? 'bg-green-50 border-green-400' 
-                            : 'bg-red-50 border-red-400'
-                        }`}>
-                          <div className="flex items-center justify-between mb-2">
-                            <h5 className="font-semibold text-sm">Validation Details</h5>
-                            <span className={`text-xs px-2 py-1 rounded ${
-                              report.validationResult.isValid 
-                                ? 'bg-green-100 text-green-800' 
-                                : 'bg-red-100 text-red-800'
-                            }`}>
-                              {report.validationResult.isValid ? 'VALID' : 'INVALID'}
-                            </span>
-                          </div>
-                          
-                          <div className="space-y-2 text-sm">
-                            <div>
-                              <span className="font-medium text-gray-600">Validator: </span>
-                              <span className={`font-mono text-gray-800 ${
-                                report.validationResult.validator.includes('rusak') || 
-                                report.validationResult.validator.includes('unavailable') 
-                                  ? 'text-red-600 bg-red-50 px-1 rounded' 
-                                  : ''
-                              }`}>
-                                {report.validationResult.validator}
-                              </span>
-                            </div>
-                            
-                            <div>
-                              <span className="font-medium text-gray-600">Validation Notes: </span>
-                              <div className={`text-gray-800 ${
-                                report.validationResult.description.includes('rusak') || 
-                                report.validationResult.description.includes('overflow') ||
-                                report.validationResult.description.includes('encoding')
-                                  ? 'text-amber-700 bg-amber-50 p-2 rounded border border-amber-200 mt-1' 
-                                  : ''
-                              }`}>
-                                {report.validationResult.description}
-                                {(report.validationResult.description.includes('rusak') || 
-                                  report.validationResult.description.includes('overflow') ||
-                                  report.validationResult.description.includes('encoding')) && (
-                                  <div className="text-xs text-amber-600 mt-1">
-                                    ⚠️ Data validation mengalami masalah encoding - laporan tetap valid
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                            
-                            <div>
-                              <span className="font-medium text-gray-600">Validated on: </span>
-                              <span className="text-gray-800">
-                                {report.validationResult.validationTimestamp > 0 
-                                  ? new Date(report.validationResult.validationTimestamp * 1000).toLocaleString()
-                                  : 'Timestamp tidak tersedia'
-                                }
-                              </span>
-                            </div>
-                          </div>
-                        </div>
+                        <ValidationDetailCard validationResult={report.validationResult} reportId={report.id} />
                       )}
 
                       <div className="space-y-2">

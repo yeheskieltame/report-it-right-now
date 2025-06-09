@@ -5,10 +5,24 @@ import SuperAdminDashboard from './dashboards/SuperAdminDashboard';
 import AdminDashboard from './dashboards/AdminDashboard';
 import ValidatorDashboard from './dashboards/ValidatorDashboard';
 import ModernReporterDashboard from './dashboards/ModernReporterDashboard';
+import ValidationTestPage from './ValidationTestPage';
+import ValidationAnalysisPage from './ValidationAnalysisPage';
 import HomePage from './HomePage';
 
 const DashboardRouter: React.FC = () => {
   const { isConnected, role } = useWallet();
+
+  // Check for test mode or analysis mode
+  const isTestMode = window.location.hash === '#test' || window.location.search.includes('test=true');
+  const isAnalysisMode = window.location.hash === '#analysis' || window.location.search.includes('analysis=true');
+  
+  if (isTestMode && isConnected) {
+    return <ValidationTestPage />;
+  }
+  
+  if (isAnalysisMode && isConnected) {
+    return <ValidationAnalysisPage />;
+  }
 
   if (!isConnected) {
     return <HomePage />;
