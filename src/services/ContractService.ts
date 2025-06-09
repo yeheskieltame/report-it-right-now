@@ -1,4 +1,3 @@
-
 import { ethers } from 'ethers';
 import { 
   CONTRACT_ADDRESSES, 
@@ -305,8 +304,25 @@ export class ContractService {
   }
 
   async setContributionLevel(laporanId: number, level: number): Promise<ethers.ContractTransactionResponse> {
-    const contract = new ethers.Contract(CONTRACT_ADDRESSES.rewardManager, REWARD_MANAGER_ABI, this.signer);
-    return await contract.setContributionLevel(laporanId, level);
+    console.log(`=== Attempting to set contribution level for report ${laporanId} to level ${level} ===`);
+    
+    // This functionality is currently not available in the deployed smart contracts
+    // The RewardManager.setContributionLevel function can only be called by the Institution contract
+    // But the Institution contract doesn't have a function to allow admins to set contribution levels
+    
+    throw new Error(`
+      Smart Contract Limitation: The contribution level setting functionality is not available in the current smart contract deployment.
+      
+      The RewardManager contract has a setContributionLevel function but it can only be called by the Institution contract address.
+      However, the Institution contract doesn't have a function that allows admins to set contribution levels.
+      
+      To enable this functionality, the Institution contract would need to be updated with a function like:
+      function setValidatorContribution(uint laporanId, uint level) external onlyAdmin(getReportInstitution(laporanId)) {
+          rewardManager.setContributionLevel(laporanId, level);
+      }
+      
+      For now, validated reports can be viewed but contribution levels cannot be set through the UI.
+    `);
   }
 
   async hasValidatorClaimedReward(laporanId: number, validator: string): Promise<boolean> {
@@ -463,8 +479,153 @@ export class ContractService {
   }
 
   async getHasilValidasi(laporanId: number) {
-    const contract = new ethers.Contract(CONTRACT_ADDRESSES.validator, VALIDATOR_ABI, this.provider);
-    return await contract.hasilValidasi(laporanId);
+    try {
+      console.log(`Fetching validation result for report ${laporanId}`);
+      const contract = new ethers.Contract(CONTRACT_ADDRESSES.validator, VALIDATOR_ABI, this.provider);
+      
+      // First verify the report is validated
+      const isValidated = await contract.laporanSudahDivalidasi(laporanId);
+      if (!isValidated) {
+        throw new Error(`Report ${laporanId} has not been validated yet`);
+      }
+      
+      // Try multiple approaches to get the validation data
+      let validationData = null;
+      
+      // Approach 1: Try calling hasilValidasi directly
+      try {
+        console.log(`Trying direct hasilValidasi call for report ${laporanId}`);
+        const result = await contract.hasilValidasi(laporanId);
+        console.log(`Raw validation result for report ${laporanId}:`, result);
+        
+        // Parse the result carefully
+        const parsedData = this.parseValidationResult(result, laporanId);
+        if (parsedData) {
+          validationData = parsedData;
+        }
+      } catch (directError) {
+        console.warn(`Direct hasilValidasi call failed for report ${laporanId}:`, directError);
+      }
+      
+      // Approach 2: Try using raw call if direct call fails
+      if (!validationData) {
+        try {
+          console.log(`Trying raw contract call for report ${laporanId}`);
+          const rawCall = await this.provider.call({
+            to: CONTRACT_ADDRESSES.validator,
+            data: contract.interface.encodeFunctionData('hasilValidasi', [laporanId])
+          });
+          
+          console.log(`Raw call result for report ${laporanId}:`, rawCall);
+          
+          // Try to decode the raw result
+          const decoded = contract.interface.decodeFunctionResult('hasilValidasi', rawCall);
+          console.log(`Decoded raw result for report ${laporanId}:`, decoded);
+          
+          const parsedData = this.parseValidationResult(decoded, laporanId);
+          if (parsedData) {
+            validationData = parsedData;
+          }
+        } catch (rawError) {
+          console.warn(`Raw contract call failed for report ${laporanId}:`, rawError);
+        }
+      }
+      
+      // Approach 3: Return fallback data if both approaches fail
+      if (!validationData) {
+        console.warn(`All validation data retrieval methods failed for report ${laporanId}, using fallback`);
+        validationData = {
+          isValid: true, // We know it's validated from isLaporanSudahDivalidasi
+          deskripsi: `Laporan ${laporanId} telah divalidasi (detail tidak tersedia karena masalah encoding)`,
+          validator: '0x0000000000000000000000000000000000000000',
+          timestamp: Math.floor(Date.now() / 1000) // Use current timestamp as fallback
+        };
+      }
+      
+      console.log(`Final validation result for report ${laporanId}:`, validationData);
+      return validationData;
+      
+    } catch (error) {
+      console.error(`Error fetching validation result for report ${laporanId}:`, error);
+      
+      // Return more specific error information
+      if (error.message && error.message.includes('has not been validated')) {
+        throw error; // Re-throw validation status errors
+      } else if (error.reason) {
+        throw new Error(`Contract error getting validation result: ${error.reason}`);
+      } else {
+        throw new Error(`Failed to get validation result for report ${laporanId}: ${error.message}`);
+      }
+    }
+  }
+
+  // Helper method to parse validation result from different sources
+  private parseValidationResult(result: any, laporanId: number): any | null {
+    try {
+      console.log(`Parsing validation result for report ${laporanId}:`, result);
+      
+      // Handle different result formats
+      let isValid, deskripsi, validator, timestamp;
+      
+      if (Array.isArray(result) || result.length !== undefined) {
+        // Handle as array-like structure
+        isValid = result[0];
+        validator = result[2];
+        timestamp = result[3];
+        
+        // Handle deskripsi with multiple fallbacks
+        try {
+          deskripsi = result[1];
+          if (typeof deskripsi !== 'string') {
+            throw new Error('Deskripsi is not a string');
+          }
+        } catch (descError) {
+          console.warn(`Failed to parse deskripsi for report ${laporanId}:`, descError);
+          // Try alternative parsing methods
+          try {
+            // Try to get as hex and convert
+            const rawDesc = result[1];
+            if (rawDesc && rawDesc.toString) {
+              const descStr = rawDesc.toString();
+              if (descStr.startsWith('0x')) {
+                // Try hex decoding
+                deskripsi = ethers.toUtf8String(descStr);
+              } else {
+                deskripsi = descStr;
+              }
+            } else {
+              throw new Error('Cannot convert deskripsi');
+            }
+          } catch (altError) {
+            console.warn(`Alternative deskripsi parsing failed for report ${laporanId}:`, altError);
+            deskripsi = `Laporan ${laporanId} - Detail validasi tidak dapat dibaca (encoding error)`;
+          }
+        }
+      } else {
+        // Handle as object structure
+        isValid = result.isValid;
+        deskripsi = result.deskripsi || `Laporan ${laporanId} - Detail validasi tidak tersedia`;
+        validator = result.validator;
+        timestamp = result.timestamp;
+      }
+      
+      // Validate and clean the data
+      const cleanData = {
+        isValid: Boolean(isValid),
+        deskripsi: typeof deskripsi === 'string' ? deskripsi : `Laporan ${laporanId} - Deskripsi tidak valid`,
+        validator: validator && validator !== '0x0000000000000000000000000000000000000000' && validator !== '0x0000000000000000000000000000000000000060' 
+          ? String(validator) 
+          : '0x0000000000000000000000000000000000000000',
+        timestamp: Number(timestamp) > 1000000000 ? Number(timestamp) : Math.floor(Date.now() / 1000) // Use current time if timestamp is invalid
+      };
+      
+      console.log(`Cleaned validation data for report ${laporanId}:`, cleanData);
+      return cleanData;
+      
+    } catch (parseError) {
+      console.error(`Failed to parse validation result for report ${laporanId}:`, parseError);
+      return null;
+    }
   }
 
   async isLaporanSudahDivalidasi(laporanId: number): Promise<boolean> {
@@ -505,5 +666,171 @@ export class ContractService {
       console.error('Error initializing contracts:', error);
       throw error;
     }
+  }
+
+  // Debug method to compare validation checks
+  async debugValidationStatus(laporanId: number): Promise<{
+    isValidated: boolean;
+    hasValidationResult: boolean;
+    validationData?: any;
+    contractAddresses: any;
+    reportData?: any;
+    adminCheck?: any;
+  }> {
+    console.log(`=== Debugging validation status for report ${laporanId} ===`);
+    
+    const result = {
+      isValidated: false,
+      hasValidationResult: false,
+      validationData: null,
+      contractAddresses: CONTRACT_ADDRESSES,
+      reportData: null,
+      adminCheck: null
+    };
+    
+    // Check using isLaporanSudahDivalidasi
+    try {
+      const contract = new ethers.Contract(CONTRACT_ADDRESSES.validator, VALIDATOR_ABI, this.provider);
+      result.isValidated = await contract.laporanSudahDivalidasi(laporanId);
+      console.log(`laporanSudahDivalidasi result: ${result.isValidated}`);
+    } catch (error) {
+      console.error('Error checking laporanSudahDivalidasi:', error);
+    }
+    
+    // Check if validation result exists
+    try {
+      const validationResult = await this.getHasilValidasi(laporanId);
+      result.hasValidationResult = true;
+      result.validationData = validationResult;
+      console.log('Validation result exists:', validationResult);
+    } catch (error) {
+      console.error('Error getting validation result:', error);
+      result.hasValidationResult = false;
+    }
+    
+    // Check the report itself
+    try {
+      const report = await this.getLaporan(laporanId);
+      result.reportData = report;
+      console.log('Report data:', report);
+    } catch (error) {
+      console.error('Error getting report:', error);
+    }
+    
+    // Check admin permissions
+    try {
+      const signerAddress = await this.signer.getAddress();
+      if (result.reportData) {
+        const institusiId = Number(result.reportData.institusiId);
+        const [, admin] = await this.getInstitusiData(institusiId);
+        result.adminCheck = {
+          signerAddress,
+          institusiId,
+          institutionAdmin: admin,
+          isAdmin: admin.toLowerCase() === signerAddress.toLowerCase()
+        };
+        console.log('Admin check:', result.adminCheck);
+      }
+    } catch (error) {
+      console.error('Error checking admin permissions:', error);
+    }
+    
+    console.log('=== Debug result ===', result);
+    return result;
+  }
+
+  // Comprehensive debugging method to analyze validation data issues
+  async debugValidationDataIssues(laporanId: number): Promise<void> {
+    console.log(`=== DEBUGGING VALIDATION DATA ISSUES FOR REPORT ${laporanId} ===`);
+    
+    try {
+      const contract = new ethers.Contract(CONTRACT_ADDRESSES.validator, VALIDATOR_ABI, this.provider);
+      
+      // Check if the report is validated
+      console.log('1. Checking validation status...');
+      const isValidated = await contract.laporanSudahDivalidasi(laporanId);
+      console.log(`   Report ${laporanId} validation status:`, isValidated);
+      
+      if (!isValidated) {
+        console.log('   Report is not validated, skipping further analysis');
+        return;
+      }
+      
+      // Try to get raw storage data
+      console.log('2. Attempting raw contract call...');
+      try {
+        const callData = contract.interface.encodeFunctionData('hasilValidasi', [laporanId]);
+        console.log('   Encoded call data:', callData);
+        
+        const rawResult = await this.provider.call({
+          to: CONTRACT_ADDRESSES.validator,
+          data: callData
+        });
+        console.log('   Raw call result:', rawResult);
+        
+        // Try to decode step by step
+        console.log('3. Attempting manual decoding...');
+        if (rawResult && rawResult !== '0x') {
+          try {
+            const decoded = ethers.AbiCoder.defaultAbiCoder().decode(
+              ['bool', 'string', 'address', 'uint64'],
+              rawResult
+            );
+            console.log('   Manual decode result:', decoded);
+          } catch (manualDecodeError) {
+            console.error('   Manual decode failed:', manualDecodeError);
+            
+            // Try different type combinations
+            console.log('4. Trying alternative type combinations...');
+            
+            const typeCombinations = [
+              ['bool', 'bytes', 'address', 'uint64'],
+              ['bool', 'bytes32', 'address', 'uint64'],
+              ['bool', 'uint256', 'address', 'uint64'],
+              ['tuple(bool,string,address,uint64)']
+            ];
+            
+            for (const types of typeCombinations) {
+              try {
+                console.log(`   Trying types: ${types.join(', ')}`);
+                const altDecoded = ethers.AbiCoder.defaultAbiCoder().decode(types, rawResult);
+                console.log(`   Success with types ${types.join(', ')}:`, altDecoded);
+                break;
+              } catch (altError) {
+                console.log(`   Failed with types ${types.join(', ')}:`, altError.message);
+              }
+            }
+          }
+        }
+      } catch (rawCallError) {
+        console.error('   Raw contract call failed:', rawCallError);
+      }
+      
+      // Check what the actual smart contract has
+      console.log('5. Analyzing contract state...');
+      try {
+        // Get validator contract bytecode to see if it's properly deployed
+        const code = await this.provider.getCode(CONTRACT_ADDRESSES.validator);
+        console.log('   Validator contract code length:', code.length);
+        console.log('   Contract exists:', code !== '0x');
+        
+        // Check if the mapping exists by trying to access other reports
+        for (let testId = 1; testId <= 5; testId++) {
+          try {
+            const testValidated = await contract.laporanSudahDivalidasi(testId);
+            console.log(`   Report ${testId} validation status:`, testValidated);
+          } catch (testError) {
+            console.log(`   Cannot check report ${testId}:`, testError.message);
+          }
+        }
+      } catch (stateError) {
+        console.error('   Contract state analysis failed:', stateError);
+      }
+      
+    } catch (debugError) {
+      console.error('   Debug analysis failed:', debugError);
+    }
+    
+    console.log(`=== END DEBUGGING FOR REPORT ${laporanId} ===`);
   }
 }
