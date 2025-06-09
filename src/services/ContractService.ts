@@ -1,4 +1,3 @@
-
 import { ethers } from 'ethers';
 import { 
   CONTRACT_ADDRESSES, 
@@ -228,15 +227,10 @@ export class ContractService {
     return await contract.updateReputation(validator, score);
   }
 
-  // User Contract Methods - Enhanced buatLaporan with detailed validation
+  // User Contract Methods - Fixed buatLaporan function
   async buatLaporan(institusiId: number, judul: string, deskripsi: string): Promise<ethers.ContractTransactionResponse> {
     console.log('=== STARTING buatLaporan PROCESS ===');
     console.log('Input parameters:', { institusiId, judul, deskripsi });
-    console.log('Parameter types:', { 
-      institusiId: typeof institusiId, 
-      judul: typeof judul, 
-      deskripsi: typeof deskripsi 
-    });
     
     // Get signer address for validation
     const signerAddress = await this.signer.getAddress();
@@ -290,15 +284,8 @@ export class ContractService {
       console.log('All validations passed, creating contract instance...');
       const contract = new ethers.Contract(CONTRACT_ADDRESSES.user, USER_ABI, this.signer);
       
-      // Log contract details
+      // Log contract details safely
       console.log('Contract address:', CONTRACT_ADDRESSES.user);
-      console.log('Contract interface functions:', Object.keys(contract.interface.functions));
-      
-      // Check if buatLaporan function exists in contract
-      if (!contract.interface.functions['buatLaporan(uint256,string,string)']) {
-        console.error('Available functions:', Object.keys(contract.interface.functions));
-        throw new Error('buatLaporan function not found in contract ABI');
-      }
       
       // Try to estimate gas with detailed logging
       console.log('Attempting gas estimation...');
@@ -308,14 +295,6 @@ export class ContractService {
       } catch (gasError: any) {
         console.error('=== GAS ESTIMATION FAILED ===');
         console.error('Gas error details:', gasError);
-        console.error('Gas error message:', gasError.message);
-        console.error('Gas error reason:', gasError.reason);
-        console.error('Gas error code:', gasError.code);
-        
-        // Try to get more specific error information
-        if (gasError.data) {
-          console.error('Gas error data:', gasError.data);
-        }
         
         throw new Error(`Gas estimation failed: ${gasError.reason || gasError.message || 'Unknown error during gas estimation'}`);
       }
@@ -329,8 +308,6 @@ export class ContractService {
     } catch (error: any) {
       console.error('=== ERROR IN buatLaporan ===');
       console.error('Error details:', error);
-      console.error('Error message:', error.message);
-      console.error('Error stack:', error.stack);
       
       // Re-throw with more context
       if (error.message.includes('Gas estimation failed')) {
