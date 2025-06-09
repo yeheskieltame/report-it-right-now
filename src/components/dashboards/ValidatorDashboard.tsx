@@ -343,31 +343,76 @@ const ValidatorDashboard: React.FC = () => {
                       </div>
 
                       <div className="space-y-4">
-                        <div className="flex items-center space-x-2">
-                          <Checkbox 
-                            id={`valid-${task.reportId}`}
-                            checked={validationResults[task.reportId]?.isValid || false}
-                            onCheckedChange={(checked) => updateValidationResult(task.reportId, 'isValid', checked)}
-                          />
-                          <Label htmlFor={`valid-${task.reportId}`}>Mark as Valid</Label>
+                        <div className="space-y-3">
+                          <Label className="text-base font-medium">Validation Decision</Label>
+                          <div className="flex space-x-6">
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="radio"
+                                id={`valid-${task.reportId}`}
+                                name={`validation-${task.reportId}`}
+                                checked={validationResults[task.reportId]?.isValid === true}
+                                onChange={() => updateValidationResult(task.reportId, 'isValid', true)}
+                                className="w-4 h-4 text-green-600"
+                              />
+                              <Label htmlFor={`valid-${task.reportId}`} className="text-green-700 font-medium">
+                                ✓ Mark as Valid
+                              </Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="radio"
+                                id={`invalid-${task.reportId}`}
+                                name={`validation-${task.reportId}`}
+                                checked={validationResults[task.reportId]?.isValid === false}
+                                onChange={() => updateValidationResult(task.reportId, 'isValid', false)}
+                                className="w-4 h-4 text-red-600"
+                              />
+                              <Label htmlFor={`invalid-${task.reportId}`} className="text-red-700 font-medium">
+                                ✗ Mark as Invalid
+                              </Label>
+                            </div>
+                          </div>
                         </div>
 
                         <div className="space-y-2">
                           <Label htmlFor={`desc-${task.reportId}`}>Validation Description</Label>
                           <Textarea
                             id={`desc-${task.reportId}`}
-                            placeholder="Enter your validation notes..."
+                            placeholder={`Enter your validation notes... ${
+                              validationResults[task.reportId]?.isValid === false 
+                                ? '(Please explain why this report is invalid)' 
+                                : '(Describe your validation findings)'
+                            }`}
                             value={validationResults[task.reportId]?.description || ''}
                             onChange={(e) => updateValidationResult(task.reportId, 'description', e.target.value)}
+                            className="min-h-[100px]"
                           />
                         </div>
 
                         <Button 
                           onClick={() => handleValidation(task.reportId)}
-                          className="w-full bg-gradient-to-r from-green-500 to-blue-500"
-                          disabled={loading || !validationResults[task.reportId]?.description}
+                          className={`w-full ${
+                            validationResults[task.reportId]?.isValid === true
+                              ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700'
+                              : validationResults[task.reportId]?.isValid === false
+                              ? 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700'
+                              : 'bg-gradient-to-r from-gray-500 to-gray-600'
+                          }`}
+                          disabled={
+                            loading || 
+                            !validationResults[task.reportId]?.description ||
+                            validationResults[task.reportId]?.isValid === undefined
+                          }
                         >
-                          {loading ? 'Submitting...' : 'Submit Validation'}
+                          {loading 
+                            ? 'Submitting...' 
+                            : validationResults[task.reportId]?.isValid === true
+                            ? 'Submit as Valid'
+                            : validationResults[task.reportId]?.isValid === false
+                            ? 'Submit as Invalid'
+                            : 'Select Valid/Invalid First'
+                          }
                         </Button>
                       </div>
                     </div>

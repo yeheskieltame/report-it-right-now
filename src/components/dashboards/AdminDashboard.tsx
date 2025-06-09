@@ -672,8 +672,14 @@ const AdminDashboard: React.FC = () => {
                             Submitted: {new Date(report.timestamp * 1000).toLocaleDateString()}
                           </p>
                         </div>
-                        <Badge className={report.status === 'Valid' ? 'bg-green-500' : 'bg-red-500'}>
-                          {report.status}
+                        <Badge className={
+                          report.status === 'Valid' 
+                            ? 'bg-green-500 text-white' 
+                            : report.status === 'Tidak Valid'
+                            ? 'bg-red-500 text-white'
+                            : 'bg-yellow-500 text-white'
+                        }>
+                          {report.status === 'Tidak Valid' ? 'Invalid' : report.status}
                         </Badge>
                       </div>
                       
