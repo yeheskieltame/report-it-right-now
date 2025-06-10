@@ -5,9 +5,24 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Building2, Users, FileText, Scale, AlertCircle, Settings, CheckCircle, XCircle, Bug, Shield, Clock } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Building2, Users, FileText, Scale, AlertCircle, Settings, CheckCircle, XCircle, Bug, Shield, Clock, BarChart3, PieChart, TrendingUp } from 'lucide-react';
 import { useWallet } from '../../context/WalletContext';
 import { toast } from 'sonner';
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer, 
+  PieChart as RechartsPieChart, 
+  Cell, 
+  LineChart, 
+  Line,
+  Pie
+} from 'recharts';
 
 interface InstitutionData {
   institusiId: number;
@@ -37,6 +52,27 @@ interface ReportData {
     hasDataIssues?: boolean;
     errorType?: string;
   };
+}
+
+// New interface for analytics
+interface ValidationAnalytics {
+  totalReports: number;
+  validReports: number;
+  invalidReports: number;
+  pendingReports: number;
+  validationRate: number;
+  validatorPerformance: {
+    validator: string;
+    totalValidations: number;
+    validCount: number;
+    invalidCount: number;
+  }[];
+  monthlyStats: {
+    month: string;
+    valid: number;
+    invalid: number;
+    total: number;
+  }[];
 }
 
 // Enhanced Validation Detail Card Component
@@ -176,6 +212,212 @@ const ValidationDetailCard: React.FC<{
   );
 };
 
+// New Analytics Card Component
+const AnalyticsOverview: React.FC<{ analytics: ValidationAnalytics }> = ({ analytics }) => {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+      {/* Stats Cards */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">Total Reports</CardTitle>
+          <FileText className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold">{analytics.totalReports}</div>
+          <p className="text-xs text-muted-foreground">
+            All submitted reports
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">Valid Reports</CardTitle>
+          <CheckCircle className="h-4 w-4 text-green-600" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold text-green-600">{analytics.validReports}</div>
+          <p className="text-xs text-muted-foreground">
+            {analytics.totalReports > 0 ? 
+              `${((analytics.validReports / analytics.totalReports) * 100).toFixed(1)}% of total` : 
+              '0% of total'
+            }
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">Invalid Reports</CardTitle>
+          <XCircle className="h-4 w-4 text-red-600" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold text-red-600">{analytics.invalidReports}</div>
+          <p className="text-xs text-muted-foreground">
+            {analytics.totalReports > 0 ? 
+              `${((analytics.invalidReports / analytics.totalReports) * 100).toFixed(1)}% of total` : 
+              '0% of total'
+            }
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">Validation Rate</CardTitle>
+          <TrendingUp className="h-4 w-4 text-blue-600" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold text-blue-600">
+            {analytics.validationRate.toFixed(1)}%
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Reports processed
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+// New Chart Components
+const ValidationStatusChart: React.FC<{ analytics: ValidationAnalytics }> = ({ analytics }) => {
+  const pieData = [
+    { name: 'Valid', value: analytics.validReports, color: '#10B981' },
+    { name: 'Invalid', value: analytics.invalidReports, color: '#EF4444' },
+    { name: 'Pending', value: analytics.pendingReports, color: '#F59E0B' }
+  ];
+
+  const COLORS = ['#10B981', '#EF4444', '#F59E0B'];
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <PieChart className="w-5 h-5" />
+          Validation Status Distribution
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="h-80">
+          <ResponsiveContainer width="100%" height="100%">
+            <RechartsPieChart>
+              <Pie
+                data={pieData}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                outerRadius={80}
+                fill="#8884d8"
+                dataKey="value"
+              >
+                {pieData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip />
+            </RechartsPieChart>
+          </ResponsiveContainer>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+const ValidatorPerformanceChart: React.FC<{ analytics: ValidationAnalytics }> = ({ analytics }) => {
+  const chartData = analytics.validatorPerformance.map(validator => ({
+    validator: `${validator.validator.substring(0, 6)}...${validator.validator.substring(38)}`,
+    fullAddress: validator.validator,
+    valid: validator.validCount,
+    invalid: validator.invalidCount,
+    total: validator.totalValidations
+  }));
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <BarChart3 className="w-5 h-5" />
+          Validator Performance
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="h-80">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis 
+                dataKey="validator" 
+                tick={{ fontSize: 12 }}
+                angle={-45}
+                textAnchor="end"
+                height={60}
+              />
+              <YAxis />
+              <Tooltip 
+                formatter={(value, name) => [value, name === 'valid' ? 'Valid' : 'Invalid']}
+                labelFormatter={(label, payload) => {
+                  const data = payload?.[0]?.payload;
+                  return data ? `Validator: ${data.fullAddress}` : label;
+                }}
+              />
+              <Bar dataKey="valid" stackId="a" fill="#10B981" name="Valid" />
+              <Bar dataKey="invalid" stackId="a" fill="#EF4444" name="Invalid" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+const MonthlyTrendsChart: React.FC<{ analytics: ValidationAnalytics }> = ({ analytics }) => {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <TrendingUp className="w-5 h-5" />
+          Monthly Validation Trends
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="h-80">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={analytics.monthlyStats}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="month" />
+              <YAxis />
+              <Tooltip />
+              <Line 
+                type="monotone" 
+                dataKey="valid" 
+                stroke="#10B981" 
+                strokeWidth={2}
+                name="Valid Reports"
+              />
+              <Line 
+                type="monotone" 
+                dataKey="invalid" 
+                stroke="#EF4444" 
+                strokeWidth={2}
+                name="Invalid Reports"
+              />
+              <Line 
+                type="monotone" 
+                dataKey="total" 
+                stroke="#3B82F6" 
+                strokeWidth={2}
+                name="Total Reports"
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
 const AdminDashboard: React.FC = () => {
   const { contractService, address } = useWallet();
   const [newValidatorAddress, setNewValidatorAddress] = useState('');
@@ -188,6 +430,16 @@ const AdminDashboard: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [contributionLevel, setContributionLevel] = useState<{[key: number]: number}>({});
   const [contractsInitialized, setContractsInitialized] = useState(false);
+  const [analytics, setAnalytics] = useState<ValidationAnalytics>({
+    totalReports: 0,
+    validReports: 0,
+    invalidReports: 0,
+    pendingReports: 0,
+    validationRate: 0,
+    validatorPerformance: [],
+    monthlyStats: []
+  });
+  const [reportFilter, setReportFilter] = useState<'all' | 'valid' | 'invalid'>('all');
 
   // Get current institution ID from localStorage
   const selectedInstitution = localStorage.getItem('selectedInstitution');
@@ -198,6 +450,159 @@ const AdminDashboard: React.FC = () => {
       loadInstitutionData();
     }
   }, [contractService, institusiId]);
+
+  // New method to calculate analytics
+  const calculateAnalytics = async () => {
+    if (!contractService) return;
+
+    try {
+      console.log('Calculating analytics for institution:', institusiId);
+      
+      const totalReports = await contractService.getLaporanCount();
+      let validCount = 0;
+      let invalidCount = 0;
+      let pendingCount = 0;
+      
+      const validatorPerformanceMap = new Map<string, {
+        validCount: number;
+        invalidCount: number;
+        totalValidations: number;
+      }>();
+      
+      const monthlyStatsMap = new Map<string, {
+        valid: number;
+        invalid: number;
+        total: number;
+      }>();
+
+      // Analyze each report
+      for (let i = 1; i <= totalReports; i++) {
+        try {
+          const laporan = await contractService.getLaporan(i);
+          
+          // Only include reports from this institution
+          if (Number(laporan.institusiId) !== institusiId) {
+            continue;
+          }
+
+          // Get month for trends
+          const reportDate = new Date(Number(laporan.creationTimestamp) * 1000);
+          const monthKey = reportDate.toLocaleString('default', { month: 'short', year: 'numeric' });
+          
+          if (!monthlyStatsMap.has(monthKey)) {
+            monthlyStatsMap.set(monthKey, { valid: 0, invalid: 0, total: 0 });
+          }
+          const monthStats = monthlyStatsMap.get(monthKey)!;
+          monthStats.total++;
+
+          // Check validation status
+          const isValidated = await contractService.isLaporanSudahDivalidasi(i);
+          
+          if (!isValidated) {
+            pendingCount++;
+            continue;
+          }
+
+          // Get validation status directly from report status field
+          const reportStatus = laporan.status;
+          console.log(`Report ${i} status from getLaporan: ${reportStatus}`);
+          
+          if (reportStatus === 'Valid') {
+            validCount++;
+            monthStats.valid++;
+          } else if (reportStatus === 'Tidak Valid') {
+            invalidCount++;
+            monthStats.invalid++;
+          } else {
+            // If status is not clearly Valid or Invalid, try to get from validation result
+            try {
+              const validationResult = await contractService.getEnhancedValidationResult(i);
+              
+              if (validationResult?.isValid) {
+                validCount++;
+                monthStats.valid++;
+              } else {
+                invalidCount++;
+                monthStats.invalid++;
+              }
+            } catch (validationError) {
+              console.warn(`Could not determine validation status for report ${i}:`, validationError);
+              // Default to invalid if we can't determine
+              invalidCount++;
+              monthStats.invalid++;
+            }
+          }
+
+          // Track validator performance if we can get validation result
+          try {
+            const validationResult = await contractService.getEnhancedValidationResult(i);
+            const validatorAddr = validationResult?.validator;
+            if (validatorAddr && validatorAddr !== '0x0000000000000000000000000000000000000000') {
+              if (!validatorPerformanceMap.has(validatorAddr)) {
+                validatorPerformanceMap.set(validatorAddr, {
+                  validCount: 0,
+                  invalidCount: 0,
+                  totalValidations: 0
+                });
+              }
+              
+              const performance = validatorPerformanceMap.get(validatorAddr)!;
+              performance.totalValidations++;
+              
+              // Use report status for counting validator performance
+              if (reportStatus === 'Valid') {
+                performance.validCount++;
+              } else if (reportStatus === 'Tidak Valid') {
+                performance.invalidCount++;
+              } else if (validationResult.isValid) {
+                performance.validCount++;
+              } else {
+                performance.invalidCount++;
+              }
+            }
+          } catch (validationError) {
+            console.warn(`Could not get validator info for report ${i}:`, validationError);
+          }
+        } catch (reportError) {
+          console.warn(`Could not load report ${i}:`, reportError);
+        }
+      }
+
+      const institutionTotal = validCount + invalidCount + pendingCount;
+      const validationRate = institutionTotal > 0 ? ((validCount + invalidCount) / institutionTotal) * 100 : 0;
+
+      // Convert validator performance map to array
+      const validatorPerformance = Array.from(validatorPerformanceMap.entries()).map(([validator, stats]) => ({
+        validator,
+        totalValidations: stats.totalValidations,
+        validCount: stats.validCount,
+        invalidCount: stats.invalidCount
+      }));
+
+      // Convert monthly stats to array and sort by date
+      const monthlyStats = Array.from(monthlyStatsMap.entries())
+        .map(([month, stats]) => ({ month, ...stats }))
+        .sort((a, b) => new Date(a.month).getTime() - new Date(b.month).getTime())
+        .slice(-6); // Last 6 months
+
+      const newAnalytics: ValidationAnalytics = {
+        totalReports: institutionTotal,
+        validReports: validCount,
+        invalidReports: invalidCount,
+        pendingReports: pendingCount,
+        validationRate,
+        validatorPerformance,
+        monthlyStats
+      };
+
+      console.log('Calculated analytics:', newAnalytics);
+      setAnalytics(newAnalytics);
+
+    } catch (error) {
+      console.error('Error calculating analytics:', error);
+      toast.error('Failed to calculate analytics');
+    }
+  };
 
   const loadInstitutionData = async () => {
     if (!contractService || institusiId === 0) return;
@@ -218,6 +623,9 @@ const AdminDashboard: React.FC = () => {
       
       // Load reports
       await loadReports();
+      
+      // Load analytics
+      await calculateAnalytics();
       
     } catch (error) {
       console.error('Error loading institution data:', error);
@@ -384,9 +792,21 @@ const AdminDashboard: React.FC = () => {
               console.log(`Report ${i} validation status:`, isValidated);
               
               if (isValidated) {
-                // Get validation results from validator contract with enhanced error handling
+                // Create base validation data using report status
+                const reportStatus = laporan.status;
+                console.log(`Report ${i} status from data: ${reportStatus}`);
+                
+                let baseValidationData = {
+                  isValid: reportStatus === 'Valid', // Use report status as primary source
+                  description: `Laporan ${i} - Status: ${reportStatus}`,
+                  validator: '0x0000000000000000000000000000000000000000',
+                  validationTimestamp: Number(laporan.creationTimestamp),
+                  hasDataIssues: false,
+                  errorType: undefined
+                };
+
+                // Try to get additional validation details from validator contract
                 try {
-                  // First try to get the validation result using the enhanced method
                   const validationResult = await contractService.getEnhancedValidationResult(i);
                   console.log(`Report ${i} validation result:`, validationResult);
                   
@@ -398,33 +818,27 @@ const AdminDashboard: React.FC = () => {
                     await contractService.debugValidationDataIssues(i);
                   }
                   
-                  // Safely extract validation data with robust fallbacks
-                  const hasDataIssues = !validationResult || 
-                      validationResult.validator === '0x0000000000000000000000000000000000000060' ||
-                      (validationResult.deskripsi && validationResult.deskripsi.includes('overflow')) ||
-                      validationResult.validator?.includes('rusak') ||
-                      validationResult.validator?.includes('unavailable') ||
-                      validationResult.deskripsi?.includes('rusak') ||
-                      validationResult.deskripsi?.includes('encoding');
+                  // Enhance the base data with validator contract details (but keep report status as primary)
+                  if (validationResult) {
+                    const hasDataIssues = !validationResult || 
+                        validationResult.validator === '0x0000000000000000000000000000000000000060' ||
+                        (validationResult.deskripsi && validationResult.deskripsi.includes('overflow')) ||
+                        validationResult.validator?.includes('rusak') ||
+                        validationResult.validator?.includes('unavailable') ||
+                        validationResult.deskripsi?.includes('rusak') ||
+                        validationResult.deskripsi?.includes('encoding');
 
-                  const validationData = {
-                    isValid: Boolean(validationResult?.isValid ?? true), // Default to valid since it's validated
-                    description: cleanValidationDescription(validationResult?.deskripsi, i),
-                    validator: cleanValidatorAddress(validationResult?.validator),
-                    validationTimestamp: cleanTimestamp(validationResult?.timestamp),
-                    hasDataIssues: hasDataIssues,
-                    errorType: hasDataIssues ? 'ABI_DECODING_ISSUE' : undefined
-                  };
-                  
-                  // Enhance report data with validation details
-                  const enhancedReportData = {
-                    ...reportData,
-                    validationResult: validationData
-                  };
-                  
-                  validatedReportsList.push(enhancedReportData);
+                    baseValidationData = {
+                      isValid: reportStatus === 'Valid', // Keep using report status as primary
+                      description: cleanValidationDescription(validationResult?.deskripsi, i) || baseValidationData.description,
+                      validator: cleanValidatorAddress(validationResult?.validator) || baseValidationData.validator,
+                      validationTimestamp: cleanTimestamp(validationResult?.timestamp) || baseValidationData.validationTimestamp,
+                      hasDataIssues: hasDataIssues,
+                      errorType: hasDataIssues ? 'ABI_DECODING_ISSUE' : undefined
+                    };
+                  }
                 } catch (validationError) {
-                  console.error(`Error getting validation result for report ${i}:`, validationError);
+                  console.error(`Error getting validation details for report ${i}:`, validationError);
                   
                   // Run comprehensive debugging for this report
                   try {
@@ -433,24 +847,19 @@ const AdminDashboard: React.FC = () => {
                     console.error(`Debug analysis failed for report ${i}:`, debugError);
                   }
                   
-                  // Always add the validated report with informative fallback data
-                  const fallbackValidationData = {
-                    isValid: true, // We know it's validated from isLaporanSudahDivalidasi
-                    description: getValidationErrorMessage(validationError, i),
-                    validator: 'Data unavailable due to ABI corruption',
-                    validationTimestamp: 0,
-                    hasDataIssues: true,
-                    errorType: 'VALIDATION_FETCH_ERROR'
-                  };
-                  
-                  const reportWithFallback = {
-                    ...reportData,
-                    validationResult: fallbackValidationData
-                  };
-                  
-                  validatedReportsList.push(reportWithFallback);
-                  console.log(`Added report ${i} with fallback validation data due to fetch error`);
+                  // Keep the base validation data with error info
+                  baseValidationData.description = `${baseValidationData.description} - Detail dari validator tidak dapat diambil: ${getValidationErrorMessage(validationError, i)}`;
+                  baseValidationData.hasDataIssues = true;
+                  baseValidationData.errorType = 'VALIDATION_FETCH_ERROR';
                 }
+                
+                // Enhance report data with validation details
+                const enhancedReportData = {
+                  ...reportData,
+                  validationResult: baseValidationData
+                };
+                
+                validatedReportsList.push(enhancedReportData);
               }
             }
           }
@@ -698,7 +1107,72 @@ const AdminDashboard: React.FC = () => {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
+          {/* Analytics Overview */}
+          <AnalyticsOverview analytics={analytics} />
+          
+          {/* Charts Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <ValidationStatusChart analytics={analytics} />
+            <ValidatorPerformanceChart analytics={analytics} />
+          </div>
+          
+          {/* Monthly Trends */}
+          <MonthlyTrendsChart analytics={analytics} />
+
+          {/* Institution Info Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <Building2 className="w-5 h-5" />
+                <span>Institution Information</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label className="text-sm font-medium">Institution Name</Label>
+                <p className="text-lg">{institutionData?.nama || 'Loading...'}</p>
+              </div>
+              <div>
+                <Label className="text-sm font-medium">Admin Address</Label>
+                <p className="text-sm font-mono">{institutionData?.admin || 'Loading...'}</p>
+              </div>
+              <div>
+                <Label className="text-sm font-medium">Treasury Address</Label>
+                <p className="text-sm font-mono">{institutionData?.treasury || 'Loading...'}</p>
+              </div>
+              <div>
+                <Label className="text-sm font-medium">Active Validators</Label>
+                <p className="text-lg">{validators.filter(v => v.isActive).length}</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Quick Actions */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Quick Actions</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex gap-4">
+                <Button onClick={() => calculateAnalytics()} disabled={loading}>
+                  <BarChart3 className="w-4 h-4 mr-2" />
+                  Refresh Analytics
+                </Button>
+                <Button 
+                  onClick={handleInitializeContracts} 
+                  disabled={loading || contractsInitialized}
+                  variant="outline"
+                >
+                  <Settings className="w-4 h-4 mr-2" />
+                  {contractsInitialized ? 'Contracts Initialized' : 'Initialize Contracts'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Legacy Institution Info for backwards compatibility */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* ...existing code... */}
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg">Institution Info</CardTitle>
@@ -832,20 +1306,104 @@ const AdminDashboard: React.FC = () => {
         <TabsContent value="reports" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <FileText className="w-5 h-5" />
-                <span>Validated Reports</span>
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <FileText className="w-5 h-5" />
+                  <span>Validated Reports</span>
+                  <Badge variant="outline" className="ml-2">
+                    {validatedReports.length} Total
+                  </Badge>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Label className="text-sm font-medium">Filter:</Label>
+                  <Select 
+                    value={reportFilter}
+                    onValueChange={(value: 'all' | 'valid' | 'invalid') => setReportFilter(value)}
+                  >
+                    <SelectTrigger className="w-48">
+                      <SelectValue placeholder="Pilih filter" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                          Semua Laporan
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="valid">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          Valid Saja
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="invalid">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                          Invalid Saja
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
                 {loading ? (
                   <p className="text-muted-foreground text-center py-8">Loading reports...</p>
-                ) : validatedReports.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-8">No validated reports</p>
-                ) : (
-                  validatedReports.map((report) => (
-                    <div key={report.id} className="border rounded-lg p-4 space-y-3">
+                ) : (() => {
+                  // Filter reports based on status from laporan.status field
+                  const filteredReports = validatedReports.filter(report => {
+                    if (reportFilter === 'all') return true;
+                    if (reportFilter === 'valid') return report.status === 'Valid';
+                    if (reportFilter === 'invalid') return report.status === 'Tidak Valid';
+                    return false;
+                  });
+
+                  // Show filter statistics
+                  const filterStats = (
+                    <div className="flex items-center justify-between mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                      <div className="text-sm text-blue-800">
+                        <span className="font-medium">
+                          Menampilkan {filteredReports.length} dari {validatedReports.length} laporan
+                        </span>
+                        {reportFilter !== 'all' && (
+                          <span className="ml-2">
+                            (Filter: {reportFilter === 'valid' ? 'Laporan Valid' : 'Laporan Invalid'})
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex gap-4 text-xs text-blue-600">
+                        <div className="flex items-center gap-1">
+                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          <span>Valid: {validatedReports.filter(r => r.status === 'Valid').length}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                          <span>Invalid: {validatedReports.filter(r => r.status === 'Tidak Valid').length}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+
+                  if (filteredReports.length === 0) {
+                    const filterText = reportFilter === 'all' ? 'reports' : 
+                                     reportFilter === 'valid' ? 'valid reports' : 'invalid reports';
+                    return (
+                      <>
+                        {filterStats}
+                        <p className="text-muted-foreground text-center py-8">
+                          No {filterText} found
+                        </p>
+                      </>
+                    );
+                  }
+
+                  return (
+                    <>
+                      {filterStats}
+                      {filteredReports.map((report) => (
+                        <div key={report.id} className="border rounded-lg p-4 space-y-3">
                       <div className="flex justify-between items-start">
                         <div>
                           <h4 className="font-semibold">{report.title}</h4>
@@ -904,8 +1462,10 @@ const AdminDashboard: React.FC = () => {
                         </div>
                       </div>
                     </div>
-                  ))
-                )}
+                  ))}
+                    </>
+                  );
+                })()}
               </div>
             </CardContent>
           </Card>
