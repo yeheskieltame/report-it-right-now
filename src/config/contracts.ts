@@ -340,6 +340,16 @@ export const INSTITUSI_ABI = [
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "uint256", "name": "laporanId", "type": "uint256"},
+      {"internalType": "bool", "name": "userMenang", "type": "bool"}
+    ],
+    "name": "finalisasiBanding",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
   }
 ];
 

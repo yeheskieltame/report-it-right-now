@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,10 +18,13 @@ import {
   Coins,
   TrendingUp,
   Shield,
-  Eye
+  Eye,
+  Scale
 } from 'lucide-react';
 import { useWallet } from '../../context/WalletContext';
 import { useToast } from '@/hooks/use-toast';
+import { ethers } from 'ethers';
+import { CONTRACT_ADDRESSES } from '../../config/contracts';
 
 const ModernReporterDashboard: React.FC = () => {
   const { contractService, address } = useWallet();
@@ -42,6 +44,7 @@ const ModernReporterDashboard: React.FC = () => {
   });
   const [loading, setLoading] = useState(false);
   const [stakeBandingAmount, setStakeBandingAmount] = useState('0');
+  const [bandingInfo, setBandingInfo] = useState<{[key: string]: any}>({});
 
   useEffect(() => {
     loadData();
@@ -135,6 +138,23 @@ const ModernReporterDashboard: React.FC = () => {
     }
   };
 
+  const loadBandingInfo = async () => {
+    if (!contractService) return;
+    
+    const bandingInfoMap: {[key: string]: any} = {};
+    
+    for (const report of myReports) {
+      try {
+        const info = await contractService.getBandingInfo(parseInt(report.id));
+        bandingInfoMap[report.id] = info;
+      } catch (error) {
+        console.error(`Error loading banding info for report ${report.id}:`, error);
+      }
+    }
+    
+    setBandingInfo(bandingInfoMap);
+  };
+
   const handleSubmitReport = async () => {
     if (!contractService || !reportForm.institusiId || !reportForm.judul || !reportForm.deskripsi) {
       toast({
@@ -187,11 +207,27 @@ const ModernReporterDashboard: React.FC = () => {
   const handleAppeal = async (reportId: string) => {
     if (!contractService) return;
 
+    const bandingData = bandingInfo[reportId];
+    if (!bandingData?.canAppeal) {
+      toast({
+        title: "Cannot Appeal",
+        description: bandingData?.reason || "This report cannot be appealed",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setLoading(true);
     try {
       // First approve tokens for appeal stake
-      await contractService.approveRTK(contractService['CONTRACT_ADDRESSES'].user, stakeBandingAmount);
+      const stakeAmount = await contractService.getStakeBandingAmount();
+      await contractService.approveRTK(CONTRACT_ADDRESSES.user, stakeAmount);
       
+      toast({
+        title: "Tokens Approved",
+        description: "Submitting appeal..."
+      });
+
       const tx = await contractService.ajukanBanding(parseInt(reportId));
       
       toast({
@@ -203,10 +239,11 @@ const ModernReporterDashboard: React.FC = () => {
       
       toast({
         title: "Success",
-        description: "Appeal submitted successfully!"
+        description: "Appeal submitted successfully! Tokens have been staked."
       });
 
       loadMyReports();
+      loadBandingInfo();
     } catch (error) {
       console.error('Error submitting appeal:', error);
       toast({
@@ -218,6 +255,12 @@ const ModernReporterDashboard: React.FC = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (myReports.length > 0) {
+      loadBandingInfo();
+    }
+  }, [myReports]);
 
   const getStatusBadge = (status: string, isBanding: boolean = false) => {
     if (isBanding) {
@@ -456,72 +499,98 @@ const ModernReporterDashboard: React.FC = () => {
                     <p className="text-gray-600">Your submitted reports will appear here</p>
                   </div>
                 ) : (
-                  myReports.map((report, index) => (
-                    <Card key={index} className="border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-200">
-                      <CardContent className="p-6">
-                        <div className="flex justify-between items-start mb-4">
-                          <div className="space-y-1">
-                            <h4 className="font-semibold text-lg text-gray-900">{report.title}</h4>
-                            <div className="flex items-center space-x-4 text-sm text-gray-600">
-                              <span>ID: #{report.id}</span>
-                              <span>•</span>
-                              <span>{report.institution}</span>
-                              <span>•</span>
-                              <span>{report.submittedAt}</span>
+                  myReports.map((report, index) => {
+                    const bandingData = bandingInfo[report.id];
+                    const showAppealSection = report.status === 'Tidak Valid' || bandingData?.isBanding;
+
+                    return (
+                      <Card key={index} className="bg-white/90 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-all duration-200">
+                        <CardHeader className="pb-3">
+                          <div className="flex items-start justify-between">
+                            <div className="space-y-1">
+                              <h3 className="font-semibold text-gray-900 line-clamp-2">{report.title}</h3>
+                              <p className="text-sm text-gray-600">{report.institution}</p>
+                            </div>
+                            <div className="flex flex-col items-end gap-2">
+                              {getStatusBadge(report.status, bandingData?.isBanding)}
+                              <span className="text-xs text-gray-500">{report.submittedAt}</span>
                             </div>
                           </div>
-                          <div className="text-right space-y-2">
-                            {getStatusBadge(report.status, report.isBanding)}
-                          </div>
-                        </div>
+                        </CardHeader>
                         
-                        <div className="bg-gray-50 p-4 rounded-lg mb-4">
-                          <p className="text-sm text-gray-700">{report.description}</p>
-                        </div>
-
-                        {report.validator && (
-                          <div className="bg-blue-50 p-4 rounded-lg mb-4 border-l-4 border-blue-500">
-                            <div className="flex items-center space-x-2 mb-2">
-                              <Eye className="w-4 h-4 text-blue-600" />
-                              <p className="text-sm font-medium text-blue-800">Assigned Validator</p>
-                            </div>
-                            <p className="text-sm text-blue-700 font-mono">{report.validator}</p>
-                          </div>
-                        )}
-
-                        {report.status === 'Tidak Valid' && !report.isBanding && (
-                          <div className="border-t pt-4">
-                            <div className="flex items-center justify-between p-4 bg-purple-50 rounded-lg">
-                              <div>
-                                <p className="font-medium text-purple-800">Appeal this decision</p>
-                                <p className="text-sm text-purple-600">
-                                  Stake {parseFloat(stakeBandingAmount).toFixed(2)} RTK to appeal
-                                </p>
+                        <CardContent className="pt-0 space-y-4">
+                          <p className="text-sm text-gray-700 line-clamp-3">{report.description}</p>
+                          
+                          {report.validator && (
+                            <div className="bg-blue-50 p-4 rounded-lg mb-4 border-l-4 border-blue-500">
+                              <div className="flex items-center space-x-2 mb-2">
+                                <Eye className="w-4 h-4 text-blue-600" />
+                                <p className="text-sm font-medium text-blue-800">Assigned Validator</p>
                               </div>
-                              <Button 
-                                onClick={() => handleAppeal(report.id)}
-                                className="bg-purple-500 hover:bg-purple-600 text-white"
-                                size="sm"
-                                disabled={loading}
-                              >
-                                {loading ? (
-                                  <div className="flex items-center space-x-2">
-                                    <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                    <span>Processing...</span>
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center space-x-2">
-                                    <Coins className="w-4 h-4" />
-                                    <span>Submit Appeal</span>
-                                  </div>
-                                )}
-                              </Button>
+                              <p className="text-sm text-blue-700 font-mono">{report.validator}</p>
                             </div>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  ))
+                          )}
+
+                          {/* Enhanced Appeal Section */}
+                          {showAppealSection && (
+                            <div className="border-t pt-4">
+                              {bandingData?.isBanding ? (
+                                <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <Scale className="w-4 h-4 text-purple-600" />
+                                    <p className="font-medium text-purple-800">Appeal In Progress</p>
+                                  </div>
+                                  <p className="text-sm text-purple-600">
+                                    Your appeal is being reviewed by the admin. You have staked {parseFloat(stakeBandingAmount).toFixed(2)} RTK tokens.
+                                  </p>
+                                </div>
+                              ) : bandingData?.canAppeal ? (
+                                <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <p className="font-medium text-red-800">Report marked as Invalid</p>
+                                      <p className="text-sm text-red-600 mb-3">
+                                        Disagree with this decision? Submit an appeal.
+                                      </p>
+                                      <div className="text-xs text-red-500 space-y-1">
+                                        <p>• Appeal requires staking {parseFloat(stakeBandingAmount).toFixed(2)} RTK tokens</p>
+                                        <p>• Tokens will be returned if appeal is successful</p>
+                                        <p>• Admin will review and make final decision</p>
+                                      </div>
+                                    </div>
+                                    <Button 
+                                      onClick={() => handleAppeal(report.id)}
+                                      className="bg-red-500 hover:bg-red-600 text-white"
+                                      size="sm"
+                                      disabled={loading}
+                                    >
+                                      {loading ? (
+                                        <div className="flex items-center space-x-2">
+                                          <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
+                                          <span>Processing...</span>
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center space-x-2">
+                                          <Scale className="w-3 h-3" />
+                                          <span>Submit Appeal</span>
+                                        </div>
+                                      )}
+                                    </Button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                  <p className="text-sm text-gray-600">
+                                    {bandingData?.reason || 'Appeal not available for this report'}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  })
                 )}
               </div>
             </CardContent>

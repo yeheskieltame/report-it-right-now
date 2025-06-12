@@ -26,14 +26,30 @@ export class ContractService {
       return tx;
     } catch (error: any) {
       console.error(`Error in ${methodName}:`, error);
+      console.error('Error details:', {
+        reason: error.reason,
+        code: error.code,
+        message: error.message,
+        data: error.data,
+        transaction: error.transaction
+      });
       
       // Parse specific error messages
       if (error.reason) {
         throw new Error(`${methodName} failed: ${error.reason}`);
       } else if (error.message && error.message.includes('execution reverted')) {
-        throw new Error(`${methodName} failed: Transaction was reverted by the contract`);
+        const revertReason = error.message.includes(':') 
+          ? error.message.split(':').pop().trim()
+          : 'Transaction was reverted by the contract';
+        throw new Error(`${methodName} failed: ${revertReason}`);
       } else if (error.code === 'CALL_EXCEPTION') {
-        throw new Error(`${methodName} failed: Contract call exception - please check your inputs and try again`);
+        throw new Error(`${methodName} failed: Contract call exception - please check your inputs and permissions`);
+      } else if (error.code === 'UNPREDICTABLE_GAS_LIMIT') {
+        throw new Error(`${methodName} failed: Cannot estimate gas - transaction may revert. Check contract state and permissions.`);
+      } else if (error.message && error.message.includes('missing revert data')) {
+        throw new Error(`${methodName} failed: Contract function reverted without error message. Check if you have the required permissions and contract state is valid.`);
+      } else if (error.message && error.message.includes('Internal JSON-RPC error')) {
+        throw new Error(`${methodName} failed: Network error occurred. Please check your connection and try again.`);
       }
       
       throw error;
@@ -419,6 +435,18 @@ export class ContractService {
   async ajukanBanding(laporanId: number): Promise<ethers.ContractTransactionResponse> {
     const contract = new ethers.Contract(CONTRACT_ADDRESSES.user, USER_ABI, this.signer);
     
+    // Check if report is eligible for appeal (must be 'Tidak Valid')
+    const laporan = await this.getLaporan(laporanId);
+    if (laporan.status !== 'Tidak Valid') {
+      throw new Error('Hanya laporan dengan status "Tidak Valid" yang dapat dibanding');
+    }
+    
+    // Check if already appealed
+    const isAlreadyAppealed = await this.isBanding(laporanId);
+    if (isAlreadyAppealed) {
+      throw new Error('Laporan ini sudah dalam proses banding');
+    }
+    
     return this.executeTransaction(
       () => contract.ajukanBanding(laporanId),
       'ajukanBanding'
@@ -442,8 +470,55 @@ export class ContractService {
   }
 
   async finalisasiBanding(laporanId: number, userMenang: boolean): Promise<ethers.ContractTransactionResponse> {
-    const contract = new ethers.Contract(CONTRACT_ADDRESSES.user, USER_ABI, this.signer);
-    return await contract.finalisasiBanding(laporanId, userMenang);
+    console.log('=== FINALISASI BANDING DEBUG ===');
+    console.log('LaporanId:', laporanId);
+    console.log('UserMenang:', userMenang);
+    
+    // Use Institusi Contract instead of User Contract for finalisasiBanding
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.institusi, INSTITUSI_ABI, this.signer);
+    
+    // Get signer address for permission check
+    const signerAddress = await this.signer.getAddress();
+    console.log('Signer address:', signerAddress);
+    
+    // Verify this is an appeal case
+    const isBandingCase = await this.isBanding(laporanId);
+    console.log('Is banding case:', isBandingCase);
+    if (!isBandingCase) {
+      throw new Error('Laporan ini bukan kasus banding');
+    }
+    
+    // Get report details to check institution ID
+    const laporan = await this.getLaporan(laporanId);
+    const institusiId = Number(laporan.institusiId);
+    console.log('Report institution ID:', institusiId);
+    
+    // Check if signer is admin of the institution
+    try {
+      const [, admin] = await this.getInstitusiData(institusiId);
+      console.log('Institution admin:', admin);
+      console.log('Is admin?', admin.toLowerCase() === signerAddress.toLowerCase());
+      
+      if (admin.toLowerCase() !== signerAddress.toLowerCase()) {
+        throw new Error(`Hanya admin institusi yang dapat memfinalisasi banding. Admin: ${admin}, Signer: ${signerAddress}`);
+      }
+    } catch (error) {
+      console.error('Error checking admin permissions:', error);
+      throw new Error(`Gagal memeriksa izin admin: ${error.message}`);
+    }
+    
+    // Verify report status
+    console.log('Report status:', laporan.status);
+    if (laporan.status !== 'Banding') {
+      throw new Error(`Status laporan tidak valid untuk finalisasi banding: ${laporan.status}. Laporan harus berstatus 'Banding' untuk dapat difinalisasi.`);
+    }
+    
+    console.log('All validations passed, calling contract function...');
+    
+    return this.executeTransaction(
+      () => contract.finalisasiBanding(laporanId, userMenang),
+      'finalisasiBanding'
+    );
   }
 
   async isBanding(laporanId: number): Promise<boolean> {
@@ -1005,217 +1080,64 @@ export class ContractService {
     return result;
   }
 
-  // Comprehensive debugging method to analyze validation data issues
-  async debugValidationDataIssues(laporanId: number): Promise<void> {
-    console.log(`=== DEBUGGING VALIDATION DATA ISSUES FOR REPORT ${laporanId} ===`);
-    
-    try {
-      const contract = new ethers.Contract(CONTRACT_ADDRESSES.validator, VALIDATOR_ABI, this.provider);
-      
-      // Check if the report is validated
-      console.log('1. Checking validation status...');
-      const isValidated = await contract.laporanSudahDivalidasi(laporanId);
-      console.log(`   Report ${laporanId} validation status:`, isValidated);
-      
-      if (!isValidated) {
-        console.log('   Report is not validated, skipping further analysis');
-        return;
-      }
-      
-      // Try to get raw storage data
-      console.log('2. Attempting raw contract call...');
-      try {
-        const callData = contract.interface.encodeFunctionData('hasilValidasi', [laporanId]);
-        console.log('   Encoded call data:', callData);
-        
-        const rawResult = await this.provider.call({
-          to: CONTRACT_ADDRESSES.validator,
-          data: callData
-        });
-        console.log('   Raw call result:', rawResult);
-        
-        // Try to decode step by step
-        console.log('3. Attempting manual decoding...');
-        if (rawResult && rawResult !== '0x') {
-          try {
-            const decoded = ethers.AbiCoder.defaultAbiCoder().decode(
-              ['address', 'bool', 'string'],
-              rawResult
-            );
-            console.log('   Manual decode result:', decoded);
-          } catch (manualDecodeError) {
-            console.error('   Manual decode failed:', manualDecodeError);
-            
-            // Try our enhanced manual hex parsing that bypasses ethers.js
-            console.log('4. Attempting enhanced manual hex parsing...');
-            const manualResult = this.parseValidationDataFromHex(rawResult);
-            if (manualResult) {
-              console.log('   Enhanced manual hex parsing successful:', manualResult);
-              // Don't return here since this is debug mode
-            } else {
-              console.log('   Enhanced manual hex parsing failed');
-            }
-            
-            // Try legacy method as final fallback
-            console.log('5. Attempting legacy manual hex parsing...');
-            const legacyResult = this.decodeValidationDataFromHex(rawResult, laporanId);
-            if (legacyResult) {
-              console.log('   Legacy manual hex parsing successful:', legacyResult);
-            } else {
-              console.log('   Legacy manual hex parsing failed');
-            }
-            
-            // Try different type combinations
-            console.log('6. Trying alternative type combinations...');
-            
-            const typeCombinations = [
-              ['bool', 'bytes', 'address', 'uint64'],
-              ['bool', 'bytes32', 'address', 'uint64'],
-              ['bool', 'uint256', 'address', 'uint64'],
-              ['tuple(bool,string,address,uint64)']
-            ];
-            
-            for (const types of typeCombinations) {
-              try {
-                console.log(`   Trying types: ${types.join(', ')}`);
-                const altDecoded = ethers.AbiCoder.defaultAbiCoder().decode(types, rawResult);
-                console.log(`   Success with types ${types.join(', ')}:`, altDecoded);
-                break;
-              } catch (altError) {
-                console.log(`   Failed with types ${types.join(', ')}:`, altError.message);
-              }
-            }
-          }
-        }
-      } catch (rawCallError) {
-        console.error('   Raw contract call failed:', rawCallError);
-      }
-      
-      // Check what the actual smart contract has
-      console.log('5. Analyzing contract state...');
-      try {
-        // Get validator contract bytecode to see if it's properly deployed
-        const code = await this.provider.getCode(CONTRACT_ADDRESSES.validator);
-        console.log('   Validator contract code length:', code.length);
-        console.log('   Contract exists:', code !== '0x');
-        
-        // Check if the mapping exists by trying to access other reports
-        for (let testId = 1; testId <= 5; testId++) {
-          try {
-            const testValidated = await contract.laporanSudahDivalidasi(testId);
-            console.log(`   Report ${testId} validation status:`, testValidated);
-          } catch (testError) {
-            console.log(`   Cannot check report ${testId}:`, testError.message);
-          }
-        }
-      } catch (stateError) {
-        console.error('   Contract state analysis failed:', stateError);
-      }
-      
-    } catch (debugError) {
-      console.error('   Debug analysis failed:', debugError);
-    }
-    
-    console.log(`=== END DEBUGGING FOR REPORT ${laporanId} ===`);
-  }
-
   // Helper method to manually decode hex data when ABI decoding fails
   private decodeValidationDataFromHex(rawHex: string, laporanId: number): any | null {
     try {
-      console.log(`=== LEGACY HEX PARSING for report ${laporanId} ===`);
-      console.log(`Raw hex:`, rawHex);
+      console.log(`Attempting manual hex decoding for report ${laporanId}:`, rawHex);
       
       if (!rawHex || rawHex === '0x' || rawHex.length < 10) {
-        console.log(`Invalid hex data for legacy parsing`);
+        console.warn('Invalid hex data for manual decoding');
         return null;
       }
-
-      // Remove 0x prefix
-      const hex = rawHex.substring(2);
       
-      let description = "";
-      let validatorAddress = "0x0000000000000000000000000000000000000000";
-      let isValid = true;
-      let timestamp = Math.floor(Date.now() / 1000);
-
-      // Simple approach: scan the hex for readable text and addresses
-      console.log(`Scanning hex data of length ${hex.length}...`);
-
-      // Look for validator addresses (40 consecutive hex chars that could be an address)
-      const addressRegex = /[0-9a-fA-F]{40}/g;
-      let addressMatch;
-      while ((addressMatch = addressRegex.exec(hex)) !== null) {
-        const potentialAddress = '0x' + addressMatch[0];
-        if (potentialAddress !== '0x0000000000000000000000000000000000000000' && 
-            potentialAddress !== '0x0000000000000000000000000000000000000060') {
-          validatorAddress = potentialAddress.toLowerCase();
-          console.log(`Legacy parser found validator: ${validatorAddress}`);
-          break;
-        }
-      }
-
-      // Look for readable text by scanning for printable ASCII sequences
-      let bestDescription = "";
-      for (let i = 0; i < hex.length - 20; i += 2) { // Step by 2 (1 byte at a time)
-        let currentText = "";
-        let j = i;
-        
-        // Extract sequence of printable characters
-        while (j < hex.length - 1) {
-          const byte = parseInt(hex.substr(j, 2), 16);
-          if (byte >= 32 && byte <= 126) { // Printable ASCII
-            currentText += String.fromCharCode(byte);
-            j += 2;
-          } else if (byte === 0) {
-            // Null terminator - end of string
-            break;
-          } else {
-            // Non-printable character
-            break;
-          }
-        }
-        
-        // Keep the longest readable text we find
-        if (currentText.length > bestDescription.length && currentText.length > 5) {
-          bestDescription = currentText;
-        }
-      }
+      // Remove 0x prefix and decode
+      const hex = rawHex.slice(2);
       
-      description = bestDescription.trim();
-      if (!description || description.length < 3) {
-        description = "Validasi berhasil - data diekstrak dengan metode legacy";
-      }
-
-      console.log(`Legacy parser extracted: "${description}"`);
-
-      // Look for timestamp-like numbers in the hex
-      for (let i = 0; i < hex.length - 15; i += 16) { // Check every 8 bytes
+      // Try to extract boolean (first 32 bytes)
+      const isValidHex = hex.slice(0, 64);
+      const isValid = parseInt(isValidHex, 16) === 1;
+      
+      // Try to extract string offset (second 32 bytes)
+      const stringOffsetHex = hex.slice(64, 128);
+      const stringOffset = parseInt(stringOffsetHex, 16) * 2; // Convert to hex position
+      
+      // Try to extract address (third 32 bytes)
+      const addressHex = hex.slice(128, 192);
+      const validator = '0x' + addressHex.slice(-40); // Last 20 bytes
+      
+      // Try to extract timestamp (fourth 32 bytes)
+      const timestampHex = hex.slice(192, 256);
+      const timestamp = parseInt(timestampHex, 16);
+      
+      // Try to extract string data
+      let deskripsi = `Validation result for report ${laporanId}`;
+      if (stringOffset < hex.length) {
         try {
-          const chunk = hex.substr(i, 16);
-          const possibleTimestamp = parseInt(chunk, 16);
-          // Reasonable timestamp range (2020-2030)
-          if (possibleTimestamp > 1577836800 && possibleTimestamp < 1893456000) {
-            timestamp = possibleTimestamp;
-            console.log(`Legacy parser found timestamp: ${timestamp}`);
-            break;
+          const stringLengthHex = hex.slice(stringOffset, stringOffset + 64);
+          const stringLength = parseInt(stringLengthHex, 16) * 2;
+          const stringDataHex = hex.slice(stringOffset + 64, stringOffset + 64 + stringLength);
+          
+          // Convert hex to string
+          const stringData = Buffer.from(stringDataHex, 'hex').toString('utf8');
+          if (stringData && stringData.length > 0) {
+            deskripsi = stringData;
           }
-        } catch (e) {
-          // Continue searching
+        } catch (stringError) {
+          console.warn('Failed to decode string data:', stringError);
         }
       }
-
-      const result = {
+      
+      console.log('Manual hex decoding result:', { isValid, deskripsi, validator, timestamp });
+      
+      return {
         isValid,
-        deskripsi: description,
-        validator: validatorAddress,
+        deskripsi,
+        validator,
         timestamp
       };
-
-      console.log(`=== LEGACY HEX PARSING RESULT ===`, result);
-      return result;
       
     } catch (error) {
-      console.error(`Legacy hex parsing failed for report ${laporanId}:`, error);
+      console.error('Manual hex decoding failed:', error);
       return null;
     }
   }
@@ -1223,183 +1145,56 @@ export class ContractService {
   // Enhanced manual hex parsing method specifically for validation data extraction
   private parseValidationDataFromHex(rawHex: string): any | null {
     try {
-      console.log(`=== ENHANCED HEX PARSING ===`);
-      console.log(`Input raw hex:`, rawHex);
-      
       if (!rawHex || rawHex === '0x' || rawHex.length < 10) {
-        console.log(`Invalid hex data: too short or empty`);
         return null;
       }
-
-      // Remove 0x prefix if present
-      const hex = rawHex.startsWith('0x') ? rawHex.slice(2) : rawHex;
-      console.log(`Cleaned hex length:`, hex.length);
-
-      let description = "";
-      let validatorAddress = "0x0000000000000000000000000000000000000000";
-      let isValid = true;
-      let timestamp = Math.floor(Date.now() / 1000);
-
-      // Method 1: Look for UTF-8 encoded text in the hex data
-      console.log(`Method 1: Scanning for UTF-8 text...`);
-      let longestText = "";
       
-      for (let i = 0; i < hex.length - 20; i += 2) { // Scan byte by byte
-        const byte = parseInt(hex.substr(i, 2), 16);
+      const hex = rawHex.slice(2);
+      
+      // ABI encoding format: bool (32 bytes) + string offset (32 bytes) + address (32 bytes) + uint64 (32 bytes) + string data
+      
+      // Extract boolean (isValid)
+      const isValid = parseInt(hex.slice(0, 64), 16) === 1;
+      
+      // Extract validator address
+      const addressHex = hex.slice(128, 192);
+      const validator = '0x' + addressHex.slice(-40);
+      
+      // Extract timestamp
+      const timestampHex = hex.slice(192, 256);
+      const timestamp = parseInt(timestampHex, 16);
+      
+      // Extract string data
+      let deskripsi = 'Validation completed';
+      try {
+        const stringOffsetHex = hex.slice(64, 128);
+        const stringOffset = parseInt(stringOffsetHex, 16) * 2;
         
-        if (byte >= 32 && byte <= 126) { // Printable ASCII range
-          let possibleText = "";
-          let j = i;
+        if (stringOffset < hex.length) {
+          const stringLengthHex = hex.slice(stringOffset, stringOffset + 64);
+          const stringLength = parseInt(stringLengthHex, 16) * 2;
           
-          // Extract continuous readable text
-          while (j < hex.length - 1) {
-            const testByte = parseInt(hex.substr(j, 2), 16);
-            if (testByte >= 32 && testByte <= 126) {
-              possibleText += String.fromCharCode(testByte);
-              j += 2;
-            } else if (testByte === 0) {
-              // Null terminator, end of string
-              break;
-            } else {
-              // Non-printable character, stop here
-              break;
+          if (stringLength > 0 && stringOffset + 64 + stringLength <= hex.length) {
+            const stringDataHex = hex.slice(stringOffset + 64, stringOffset + 64 + stringLength);
+            const decoded = Buffer.from(stringDataHex, 'hex').toString('utf8').replace(/\0/g, '');
+            if (decoded && decoded.length > 0) {
+              deskripsi = decoded;
             }
           }
-          
-          // Keep the longest meaningful text we find
-          if (possibleText.length > longestText.length && possibleText.length > 5) {
-            longestText = possibleText.trim();
-            console.log(`Found text candidate: "${longestText}"`);
-          }
         }
+      } catch (stringError) {
+        console.warn('Failed to decode string from hex:', stringError);
       }
-
-      if (longestText.length > 0) {
-        description = longestText;
-        console.log(`Method 1 extracted: "${description}"`);
-      }
-
-      // Method 2: Look for specific known phrases that appear in the logs
-      console.log(`Method 2: Looking for known validation phrases...`);
-      const knownPhrases = [
-        'ya ini valid, sudah masuk laporannya',
-        'ya ini valid',
-        'sudah masuk laporannya', 
-        'admin test validation',
-        'test fitur validasi',
-        'laporan valid',
-        'validation successful'
-      ];
       
-      for (const phrase of knownPhrases) {
-        const phraseHex = Buffer.from(phrase, 'utf8').toString('hex');
-        if (hex.toLowerCase().includes(phraseHex.toLowerCase())) {
-          console.log(`Found known phrase "${phrase}" in hex data`);
-          
-          // Try to extract the full sentence around this phrase
-          const phraseIndex = hex.toLowerCase().indexOf(phraseHex.toLowerCase());
-          if (phraseIndex !== -1) {
-            // Look for the start and end of the full text
-            let startIndex = Math.max(0, phraseIndex - 100); // Look back up to 50 bytes
-            let endIndex = Math.min(hex.length, phraseIndex + phraseHex.length + 100); // Look ahead up to 50 bytes
-            
-            // Find actual text boundaries
-            while (startIndex > 0) {
-              const testByte = parseInt(hex.substr(startIndex, 2), 16);
-              if (testByte >= 32 && testByte <= 126) {
-                startIndex -= 2;
-              } else {
-                startIndex += 2; // Move forward to the first printable char
-                break;
-              }
-            }
-            
-            while (endIndex < hex.length - 1) {
-              const testByte = parseInt(hex.substr(endIndex, 2), 16);
-              if (testByte >= 32 && testByte <= 126) {
-                endIndex += 2;
-              } else {
-                break;
-              }
-            }
-            
-            // Extract the full text
-            try {
-              const fullTextHex = hex.substr(startIndex, endIndex - startIndex);
-              const fullText = Buffer.from(fullTextHex, 'hex').toString('utf8').trim();
-              if (fullText.length > description.length && fullText.includes(phrase)) {
-                description = fullText;
-                console.log(`Method 2 extracted full description: "${description}"`);
-              }
-            } catch (e) {
-              console.warn(`Failed to decode expanded text around phrase "${phrase}":`, e);
-            }
-            break;
-          }
-        }
-      }
-
-      // Method 3: Look for validator addresses (0x followed by 40 hex chars)
-      console.log(`Method 3: Looking for validator addresses...`);
-      const addressPattern = /[0-9a-fA-F]{40}/g;
-      let match;
-      
-      while ((match = addressPattern.exec(hex)) !== null) {
-        const potentialAddress = '0x' + match[0].toLowerCase();
-        console.log(`Found potential address: ${potentialAddress}`);
-        
-        // Check if it's not a zero address or common padding
-        if (potentialAddress !== '0x0000000000000000000000000000000000000000' && 
-            potentialAddress !== '0x0000000000000000000000000000000000000060' &&
-            !potentialAddress.endsWith('0000000000000000000000000000000000000')) {
-          validatorAddress = potentialAddress;
-          console.log(`Method 3 found validator address: ${validatorAddress}`);
-          break;
-        }
-      }
-
-      // Method 4: Look for timestamps (reasonable unix timestamps)
-      console.log(`Method 4: Looking for timestamps...`);
-      for (let i = 0; i < hex.length - 15; i += 2) {
-        const chunk = hex.substr(i, 16); // 8 bytes = 16 hex chars
-        try {
-          const possibleTimestamp = parseInt(chunk, 16);
-          // Check if it's a reasonable timestamp (between 2020 and 2030)
-          if (possibleTimestamp > 1577836800 && possibleTimestamp < 1893456000) {
-            timestamp = possibleTimestamp;
-            console.log(`Method 4 found timestamp: ${timestamp} (${new Date(timestamp * 1000)})`);
-            break;
-          }
-        } catch (e) {
-          // Ignore parsing errors
-        }
-      }
-
-      // Clean up the description
-      description = description.replace(/\x00/g, '').replace(/\0/g, '').trim();
-      
-      // If we didn't find a good description, but we have a valid address, it's still a success
-      if (!description || description.length < 3) {
-        if (validatorAddress !== "0x0000000000000000000000000000000000000000") {
-          description = "Validasi berhasil - data diekstrak dari blockchain";
-        } else {
-          console.log(`No meaningful data extracted from hex`);
-          return null;
-        }
-      }
-
-      const result = {
-        validator: validatorAddress,
+      return {
         isValid,
-        deskripsi: description,
+        deskripsi,
+        validator,
         timestamp
       };
-
-      console.log(`=== ENHANCED HEX PARSING RESULT ===`, result);
-      return result;
-
+      
     } catch (error) {
-      console.error(`Enhanced hex parsing failed:`, error);
+      console.error('Enhanced hex parsing failed:', error);
       return null;
     }
   }
@@ -1407,147 +1202,161 @@ export class ContractService {
   // Simple and direct hex extraction method that prioritizes success
   private extractValidationFromRawHex(rawHex: string, laporanId: number): any | null {
     try {
-      console.log(`=== SIMPLE HEX EXTRACTION for report ${laporanId} ===`);
-      console.log(`Raw hex data:`, rawHex);
-      
-      if (!rawHex || rawHex === '0x' || rawHex.length < 10) {
-        console.log(`Invalid hex data`);
+      if (!rawHex || rawHex === '0x' || rawHex.length < 256) {
         return null;
       }
-
-      const hex = rawHex.startsWith('0x') ? rawHex.slice(2) : rawHex;
       
-      // STEP 1: Extract validator address (real address from position 24-64)
-      let validatorAddress = "0x0000000000000000000000000000000000000000";
-      if (hex.length >= 64) {
-        // Extract the validator address from the first 64 characters (32 bytes)
-        const potentialValidator = '0x' + hex.substring(24, 64);
-        if (potentialValidator !== '0x0000000000000000000000000000000000000000' && 
-            potentialValidator !== '0x0000000000000000000000000000000000000060') {
-          validatorAddress = potentialValidator.toLowerCase();
-          console.log(`✅ Found validator address: ${validatorAddress}`);
-        }
-      }
-
-      // STEP 2: Direct text extraction using simple hex-to-ASCII conversion
-      let description = "";
+      const hex = rawHex.slice(2);
       
-      // Look for the longest readable ASCII text in the hex
-      let bestText = "";
-      for (let i = 0; i < hex.length - 20; i += 2) {
-        let currentText = "";
-        
-        // Extract continuous ASCII characters
-        for (let j = i; j < hex.length - 1; j += 2) {
-          const byte = parseInt(hex.substr(j, 2), 16);
-          if (byte >= 32 && byte <= 126) { // Printable ASCII
-            currentText += String.fromCharCode(byte);
-          } else if (byte === 0) {
-            // Null terminator
-            break;
-          } else {
-            // Non-printable, stop here
-            break;
-          }
-        }
-        
-        // Keep the longest meaningful text
-        if (currentText.length > bestText.length && currentText.length >= 5) {
-          bestText = currentText.trim();
-        }
-      }
+      // Extract the most reliable parts
+      const isValid = parseInt(hex.slice(0, 64), 16) === 1;
+      const validator = '0x' + hex.slice(128, 192).slice(-40);
+      const timestamp = parseInt(hex.slice(192, 256), 16);
       
-      if (bestText.length > 0) {
-        description = bestText;
-        console.log(`✅ Extracted description: "${description}"`);
-      }
-
-      // STEP 3: Try to extract known validation phrases directly
-      if (!description || description.length < 3) {
-        console.log(`Searching for known phrases in hex...`);
-        
-        const knownTexts = [
-          'ya ini valid, sudah masuk laporannya',
-          'ya ini valid',
-          'sudah masuk laporannya',
-          'test fitur invalid',
-          'admin test',
-          'laporan valid',
-          'validation successful'
-        ];
-        
-        for (const text of knownTexts) {
-          const textHex = Buffer.from(text, 'utf8').toString('hex');
-          if (hex.toLowerCase().includes(textHex.toLowerCase())) {
-            description = text;
-            console.log(`✅ Found known phrase: "${description}"`);
-            break;
-          }
-        }
-      }
-
-      // STEP 4: Try Buffer conversion for the part that might contain the description
-      if (!description || description.length < 3) {
-        console.log(`Trying Buffer conversion...`);
-        
-        // Look for length-prefixed strings (common in ABI encoding)
-        for (let i = 0; i < hex.length - 20; i += 2) {
-          try {
-            // Try to find a length byte/word that indicates string length
-            const possibleLength = parseInt(hex.substr(i, 2), 16);
-            if (possibleLength > 5 && possibleLength < 200 && i + 2 + (possibleLength * 2) <= hex.length) {
-              const textHex = hex.substr(i + 2, possibleLength * 2);
-              const decodedText = Buffer.from(textHex, 'hex').toString('utf8');
-              
-              // Check if it's readable
-              if (decodedText && /^[\x20-\x7E]+$/.test(decodedText)) {
-                description = decodedText.trim();
-                console.log(`✅ Buffer conversion found: "${description}"`);
-                break;
-              }
-            }
-          } catch (e) {
-            // Continue searching
-          }
-        }
-      }
-
-      // STEP 5: Extract timestamp if possible
-      let timestamp = Math.floor(Date.now() / 1000);
-      
-      // Look for timestamp-like numbers in the hex
-      for (let i = hex.length - 20; i >= 0; i -= 16) {
-        try {
-          const chunk = hex.substr(i, 16);
-          const possibleTimestamp = parseInt(chunk, 16);
-          if (possibleTimestamp > 1577836800 && possibleTimestamp < 1893456000) { // 2020-2030
-            timestamp = possibleTimestamp;
-            console.log(`✅ Found timestamp: ${timestamp}`);
-            break;
-          }
-        } catch (e) {
-          // Continue
-        }
-      }
-
-      // Final validation
-      if (!description || description.length < 3) {
-        description = "Validasi berhasil - data berhasil diekstrak";
-      }
-
-      const result = {
-        isValid: true,
-        deskripsi: description,
-        validator: validatorAddress,
+      return {
+        isValid,
+        deskripsi: `Report ${laporanId} validated - ${isValid ? 'Valid' : 'Invalid'}`,
+        validator,
         timestamp
       };
-
-      console.log(`✅ SIMPLE EXTRACTION RESULT:`, result);
-      return result;
       
     } catch (error) {
-      console.error(`Simple hex extraction failed for report ${laporanId}:`, error);
+      console.error('Simple hex extraction failed:', error);
       return null;
+    }
+  }
+
+  // Comprehensive debugging method to analyze validation data issues
+  async debugValidationDataIssues(laporanId: number): Promise<void> {
+    try {
+      console.log(`=== DEBUGGING VALIDATION DATA ISSUES FOR REPORT ${laporanId} ===`);
+      
+      const contract = new ethers.Contract(CONTRACT_ADDRESSES.validator, VALIDATOR_ABI, this.provider);
+      
+      // Try different approaches to get data
+      console.log('1. Testing direct function call...');
+      try {
+        const directResult = await contract.hasilValidasi(laporanId);
+        console.log('Direct result:', directResult);
+      } catch (directError) {
+        console.log('Direct call failed:', directError.message);
+      }
+      
+      console.log('2. Testing raw call...');
+      try {
+        const callData = contract.interface.encodeFunctionData('hasilValidasi', [laporanId]);
+        const rawResult = await this.provider.call({
+          to: CONTRACT_ADDRESSES.validator,
+          data: callData
+        });
+        console.log('Raw result:', rawResult);
+        console.log('Raw result length:', rawResult.length);
+        
+        if (rawResult && rawResult !== '0x') {
+          console.log('3. Testing manual decoding methods...');
+          
+          const method1 = this.decodeValidationDataFromHex(rawResult, laporanId);
+          console.log('Method 1 (legacy):', method1);
+          
+          const method2 = this.parseValidationDataFromHex(rawResult);
+          console.log('Method 2 (enhanced):', method2);
+          
+          const method3 = this.extractValidationFromRawHex(rawResult, laporanId);
+          console.log('Method 3 (simple):', method3);
+        }
+      } catch (rawError) {
+        console.log('Raw call failed:', rawError.message);
+      }
+      
+      console.log(`=== END DEBUG FOR REPORT ${laporanId} ===`);
+      
+    } catch (error) {
+      console.error(`Debug validation data issues failed for report ${laporanId}:`, error);
+    }
+  }
+
+  // Debug method for appeal finalization
+  async debugAppealFinalization(laporanId: number): Promise<any> {
+    console.log('=== DEBUG APPEAL FINALIZATION ===');
+    
+    try {
+      const signerAddress = await this.signer.getAddress();
+      const laporan = await this.getLaporan(laporanId);
+      const institusiId = Number(laporan.institusiId);
+      const isBanding = await this.isBanding(laporanId);
+      
+      // Check institution data
+      const [institutionName, admin, treasury] = await this.getInstitusiData(institusiId);
+      
+      // Check if contracts are properly initialized
+      const institusiContract = new ethers.Contract(CONTRACT_ADDRESSES.institusi, INSTITUSI_ABI, this.provider);
+      
+      // Try to check if function exists
+      let functionExists = false;
+      try {
+        const fragment = institusiContract.interface.getFunction('finalisasiBanding');
+        functionExists = !!fragment;
+      } catch (e) {
+        functionExists = false;
+      }
+      
+      const debugInfo = {
+        signerAddress,
+        institusiId,
+        institutionName,
+        institutionAdmin: admin,
+        institutionTreasury: treasury,
+        isAdmin: admin.toLowerCase() === signerAddress.toLowerCase(),
+        reportStatus: laporan.status,
+        isBanding,
+        functionExists,
+        contractAddresses: CONTRACT_ADDRESSES,
+        reportData: laporan
+      };
+      
+      console.log('Debug info:', debugInfo);
+      return debugInfo;
+      
+    } catch (error) {
+      console.error('Error in debug appeal finalization:', error);
+      throw error;
+    }
+  }
+
+  async getBandingInfo(laporanId: number): Promise<{
+    isBanding: boolean;
+    canAppeal: boolean;
+    reason: string;
+  }> {
+    try {
+      const laporan = await this.getLaporan(laporanId);
+      const isBanding = await this.isBanding(laporanId);
+      
+      let canAppeal = false;
+      let reason = '';
+      
+      if (isBanding) {
+        reason = 'Laporan sedang dalam proses banding';
+      } else if (laporan.status === 'Valid') {
+        reason = 'Laporan valid tidak dapat dibanding';
+      } else if (laporan.status === 'Menunggu') {
+        reason = 'Laporan belum divalidasi';
+      } else if (laporan.status === 'Tidak Valid') {
+        canAppeal = true;
+        reason = 'Laporan dapat dibanding';
+      }
+      
+      return {
+        isBanding,
+        canAppeal,
+        reason
+      };
+    } catch (error) {
+      return {
+        isBanding: false,
+        canAppeal: false,
+        reason: `Error: ${error.message}`
+      };
     }
   }
 }

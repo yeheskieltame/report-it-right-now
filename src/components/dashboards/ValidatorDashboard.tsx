@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Shield, Coins, Trophy, Settings, AlertCircle, CheckCircle } from 'lucide-react';
+import { Shield, Coins, Trophy, Settings, AlertCircle, CheckCircle, Scale, AlertTriangle } from 'lucide-react';
 import { useWallet } from '../../context/WalletContext';
 import { useToast } from '@/hooks/use-toast';
 
@@ -24,10 +24,14 @@ const ValidatorDashboard: React.FC = () => {
   const [allowance, setAllowance] = useState('0');
   const [loading, setLoading] = useState(false);
   const [stakingStep, setStakingStep] = useState<'approve' | 'stake' | 'complete'>('approve');
+  const [appealedReports, setAppealedReports] = useState<any[]>([]);
 
   useEffect(() => {
-    loadValidatorData();
-    loadTasks();
+    if (address && contractService) {
+      loadValidatorData();
+      loadTasks();
+      loadAppealedReports();
+    }
   }, [contractService, address]);
 
   const loadValidatorData = async () => {
@@ -84,6 +88,40 @@ const ValidatorDashboard: React.FC = () => {
       setTasks(validatorTasks);
     } catch (error) {
       console.error('Error loading tasks:', error);
+    }
+  };
+
+  const loadAppealedReports = async () => {
+    if (!contractService || !address) return;
+    
+    try {
+      const totalReports = await contractService.getLaporanCount();
+      const appealed: any[] = [];
+      
+      for (let i = 1; i <= totalReports; i++) {
+        try {
+          const laporan = await contractService.getLaporan(i);
+          const isBanding = await contractService.isBanding(i);
+          
+          // Check if this validator was assigned to this report and it's now appealed
+          if (laporan.assignedValidator?.toLowerCase() === address.toLowerCase() && isBanding) {
+            appealed.push({
+              reportId: i,
+              title: laporan.judul,
+              description: laporan.deskripsi,
+              pelapor: laporan.pelapor,
+              status: laporan.status,
+              timestamp: Number(laporan.creationTimestamp)
+            });
+          }
+        } catch (error) {
+          console.log(`Error loading report ${i}:`, error);
+        }
+      }
+      
+      setAppealedReports(appealed);
+    } catch (error) {
+      console.error('Error loading appealed reports:', error);
     }
   };
 
@@ -296,17 +334,18 @@ const ValidatorDashboard: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center space-x-3">
-        <Shield className="w-8 h-8 text-green-600" />
-        <h2 className="text-3xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
-          Validator Dashboard
-        </h2>
+    <div className="container mx-auto p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Validator Dashboard</h1>
+          <p className="text-gray-600">Validate reports and monitor appeals</p>
+        </div>
       </div>
 
       <Tabs defaultValue="tasks" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="tasks">My Tasks</TabsTrigger>
+          <TabsTrigger value="appeals">Appeals</TabsTrigger>
           <TabsTrigger value="staking">Staking & Rewards</TabsTrigger>
           <TabsTrigger value="profile">Profile</TabsTrigger>
         </TabsList>
@@ -419,6 +458,65 @@ const ValidatorDashboard: React.FC = () => {
                   ))
                 )}
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Add appealed reports section */}
+        <TabsContent value="appeals" className="space-y-6">
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Scale className="w-5 h-5 text-purple-600" />
+                Reports You Validated - Now Under Appeal
+              </CardTitle>
+              <p className="text-sm text-gray-600">
+                These reports were marked as Invalid by you, but are now being appealed by the reporters.
+              </p>
+            </CardHeader>
+            <CardContent>
+              {appealedReports.length === 0 ? (
+                <p className="text-gray-500 text-center py-4">No appeals for your validations</p>
+              ) : (
+                <div className="space-y-4">
+                  {appealedReports.map((report) => (
+                    <div key={report.reportId} className="border border-purple-200 rounded-lg p-4 bg-purple-50/30">
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <h4 className="font-medium text-gray-900">Report #{report.reportId}</h4>
+                          <p className="text-sm text-gray-600">{report.title}</p>
+                        </div>
+                        <Badge className="bg-purple-500 text-white">
+                          Appeal Pending
+                        </Badge>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-3">
+                        <div>
+                          <p className="font-medium text-gray-700">Reporter:</p>
+                          <p className="font-mono text-gray-600">{report.pelapor}</p>
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-700">Original Validation Date:</p>
+                          <p className="text-gray-600">
+                            {new Date(report.timestamp * 1000).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="bg-amber-50 border border-amber-200 rounded p-3">
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5" />
+                          <div className="text-sm text-amber-800">
+                            <p><strong>Appeal Notice:</strong> The reporter has disagreed with your "Invalid" decision and submitted an appeal.</p>
+                            <p className="mt-1">The admin will review both your validation and the reporter's appeal to make a final decision.</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

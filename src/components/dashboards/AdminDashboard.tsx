@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Building2, Users, FileText, Scale, AlertCircle, Settings, CheckCircle, XCircle, Bug, Shield, Clock, BarChart3, PieChart, TrendingUp } from 'lucide-react';
+import { Building2, Users, FileText, Scale, AlertCircle, Settings, CheckCircle, XCircle, Bug, Shield, Clock, BarChart3, PieChart, TrendingUp, AlertTriangle, X, CheckCircle2 } from 'lucide-react';
 import { useWallet } from '../../context/WalletContext';
 import { toast } from 'sonner';
 import { 
@@ -1024,18 +1024,50 @@ const AdminDashboard: React.FC = () => {
 
     try {
       setLoading(true);
-      toast.info('Memproses keputusan banding...');
+      
+      // Debug appeal finalization before attempting
+      console.log('=== DEBUGGING APPEAL FINALIZATION ===');
+      const debugInfo = await contractService.debugAppealFinalization(reportId);
+      console.log('Debug info:', debugInfo);
+      
+      if (!debugInfo.isAdmin) {
+        toast.error(`Anda bukan admin institusi ini. Admin: ${debugInfo.institutionAdmin}`);
+        return;
+      }
+      
+      if (!debugInfo.isBanding) {
+        toast.error('Laporan ini bukan kasus banding');
+        return;
+      }
+      
+      if (!debugInfo.functionExists) {
+        toast.error('Fungsi finalisasiBanding tidak tersedia di kontrak');
+        return;
+      }
+      
+      // Show confirmation dialog
+      const confirmed = window.confirm(
+        `Are you sure you want to ${userWins ? 'APPROVE' : 'REJECT'} this appeal?\n\n` +
+        `Report ID: ${reportId}\n` +
+        `Decision: ${userWins ? 'User wins - Report will be marked as Valid' : 'User loses - Report remains Invalid'}\n` +
+        `Stake: ${userWins ? 'Returned to user' : 'Forfeited'}`
+      );
+      
+      if (!confirmed) return;
+      
+      toast.info(`Processing appeal decision: ${userWins ? 'APPROVING' : 'REJECTING'}...`);
       
       const tx = await contractService.finalisasiBanding(reportId, userWins);
-      toast.info('Transaksi dikirim, menunggu konfirmasi...');
+      toast.info('Transaction submitted, waiting for confirmation...');
       
       await tx.wait();
-      toast.success(`Banding ${userWins ? 'diterima' : 'ditolak'}!`);
+      toast.success(`Appeal ${userWins ? 'approved' : 'rejected'} successfully!`);
       
+      // Reload data
       await loadReports();
     } catch (error: any) {
       console.error('Error processing appeal:', error);
-      toast.error(`Gagal memproses banding: ${error.message || 'Unknown error'}`);
+      toast.error(`Failed to process appeal: ${error.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
@@ -1487,35 +1519,82 @@ const AdminDashboard: React.FC = () => {
                   <p className="text-muted-foreground text-center py-8">No appeals to review</p>
                 ) : (
                   appealReports.map((report) => (
-                    <div key={report.id} className="border rounded-lg p-4 space-y-3">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h4 className="font-semibold">{report.title}</h4>
-                          <p className="text-sm text-muted-foreground">ID: {report.id}</p>
-                          <p className="text-sm text-muted-foreground">Reporter: {report.pelapor}</p>
+                    <Card key={report.id} className="border-purple-200 bg-purple-50/50">
+                      <CardHeader>
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <CardTitle className="text-lg flex items-center gap-2">
+                              <Scale className="w-5 h-5 text-purple-600" />
+                              Appeal Case #{report.id}
+                            </CardTitle>
+                            <p className="text-sm text-gray-600 mt-1">{report.title}</p>
+                          </div>
+                          <Badge className="bg-purple-500 text-white">
+                            Appeal Pending
+                          </Badge>
                         </div>
-                        <Badge className="bg-yellow-500">Appeal</Badge>
-                      </div>
-                      <p className="text-sm">{report.description}</p>
-                      <div className="flex space-x-2">
-                        <Button 
-                          onClick={() => handleAppealDecision(report.id, true)}
-                          className="bg-green-500 hover:bg-green-600"
-                          size="sm"
-                          disabled={loading}
-                        >
-                          User Wins
-                        </Button>
-                        <Button 
-                          onClick={() => handleAppealDecision(report.id, false)}
-                          className="bg-red-500 hover:bg-red-600"
-                          size="sm"
-                          disabled={loading}
-                        >
-                          User Loses
-                        </Button>
-                      </div>
-                    </div>
+                      </CardHeader>
+                      
+                      <CardContent className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <p className="font-medium text-gray-700">Reporter:</p>
+                            <p className="font-mono text-gray-600">{report.pelapor}</p>
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-700">Submitted:</p>
+                            <p className="text-gray-600">
+                              {new Date(report.timestamp * 1000).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <p className="font-medium text-gray-700 mb-2">Report Description:</p>
+                          <div className="bg-white p-3 rounded border">
+                            <p className="text-sm text-gray-800">{report.description}</p>
+                          </div>
+                        </div>
+                        
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                          <div className="flex items-start gap-2">
+                            <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5" />
+                            <div className="text-sm text-amber-800">
+                              <p className="font-medium">Appeal Information:</p>
+                              <p>This report was marked as "Invalid" by a validator, but the reporter has appealed the decision.</p>
+                              <p className="mt-1">The reporter has staked tokens for this appeal. Your decision will determine the final outcome.</p>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex gap-3 pt-4 border-t">
+                          <Button
+                            onClick={() => handleAppealDecision(report.id, true)}
+                            className="flex-1 bg-green-500 hover:bg-green-600 text-white"
+                            disabled={loading}
+                          >
+                            <CheckCircle2 className="w-4 h-4 mr-2" />
+                            Approve Appeal
+                            <span className="text-xs ml-2">(Mark as Valid)</span>
+                          </Button>
+                          
+                          <Button
+                            onClick={() => handleAppealDecision(report.id, false)}
+                            className="flex-1 bg-red-500 hover:bg-red-600 text-white"
+                            disabled={loading}
+                          >
+                            <X className="w-4 h-4 mr-2" />
+                            Reject Appeal
+                            <span className="text-xs ml-2">(Keep Invalid)</span>
+                          </Button>
+                        </div>
+                        
+                        <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded">
+                          <p><strong>Note:</strong> Approving will mark the report as Valid and return staked tokens to the reporter. 
+                          Rejecting will keep the report as Invalid and forfeit the staked tokens.</p>
+                        </div>
+                      </CardContent>
+                    </Card>
                   ))
                 )}
               </div>
