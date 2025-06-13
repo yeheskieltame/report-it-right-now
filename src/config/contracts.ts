@@ -13,11 +13,866 @@ export const TARANIUM_NETWORK = {
 export const CONTRACT_ADDRESSES = {
   rtkToken: '0xEfAEB0a500c5329D70cD1323468f1E906b4962e3',
   rewardManager: '0x641D0Bf2936E2183443c60513b1094Ff5E39D42F',
-  institusi: '0x48A5862D07E6b81D52C0a9911C8FEac275aFacB2',
-  user: '0xAaeECCAe4203F94f634B349bB82D61b1f6F34FE5',
-  validator: '0xABAa1C01c026849F7eDc9C212c78a6b1D353d58b'
+  institusi: '0x523764Cd8A212D37092a99C1e4f0A7192977936c',
+  user: '0xEc4Bc28c308e21f119FAe768095aAe96d130537e',
+  validator: '0xB193Afc274A54F8f83fA7FFE7612B0964adbd61E'
 };
-
+export const USER_ABI =[
+	{
+		"inputs": [],
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "owner",
+				"type": "address"
+			}
+		],
+		"name": "OwnableInvalidOwner",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "account",
+				"type": "address"
+			}
+		],
+		"name": "OwnableUnauthorizedAccount",
+		"type": "error"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "laporanId",
+				"type": "uint256"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "pelapor",
+				"type": "address"
+			}
+		],
+		"name": "BandingDiajukan",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "institusi",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "rewardManager",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "validator",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "rtkToken",
+				"type": "address"
+			}
+		],
+		"name": "ContractsSet",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "laporanId",
+				"type": "uint256"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "pelapor",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "institusiId",
+				"type": "uint256"
+			}
+		],
+		"name": "LaporanBaru",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "previousOwner",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "newOwner",
+				"type": "address"
+			}
+		],
+		"name": "OwnershipTransferred",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "laporanId",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "status",
+				"type": "string"
+			}
+		],
+		"name": "StatusLaporanDiupdate",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "laporanId",
+				"type": "uint256"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "validator",
+				"type": "address"
+			}
+		],
+		"name": "ValidatorDitugaskan",
+		"type": "event"
+	},
+	{
+		"inputs": [],
+		"name": "STAKE_BANDING_AMOUNT",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"name": "activeAssignmentsCount",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "laporanId",
+				"type": "uint256"
+			}
+		],
+		"name": "ajukanBanding",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "institusiId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "judul",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "deskripsi",
+				"type": "string"
+			}
+		],
+		"name": "buatLaporan",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "validator",
+				"type": "address"
+			}
+		],
+		"name": "completeAssignment",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "laporanId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bool",
+				"name": "userMenang",
+				"type": "bool"
+			}
+		],
+		"name": "finalisasiBanding",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "laporanId",
+				"type": "uint256"
+			}
+		],
+		"name": "getLaporanDetails",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "assignedValidator",
+				"type": "address"
+			},
+			{
+				"internalType": "uint64",
+				"name": "creationTimestamp",
+				"type": "uint64"
+			},
+			{
+				"internalType": "uint256",
+				"name": "institusiId",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "institusiContract",
+		"outputs": [
+			{
+				"internalType": "contract IInstitusiContract",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "institusiContractAddress",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "isBanding",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "laporan",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "laporanId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "institusiId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address",
+				"name": "pelapor",
+				"type": "address"
+			},
+			{
+				"internalType": "string",
+				"name": "judul",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "deskripsi",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "status",
+				"type": "string"
+			},
+			{
+				"internalType": "address",
+				"name": "validatorAddress",
+				"type": "address"
+			},
+			{
+				"internalType": "address",
+				"name": "assignedValidator",
+				"type": "address"
+			},
+			{
+				"internalType": "uint64",
+				"name": "creationTimestamp",
+				"type": "uint64"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "laporanCounter",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "owner",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "renounceOwnership",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "rewardManager",
+		"outputs": [
+			{
+				"internalType": "contract IRewardManager",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "rtkToken",
+		"outputs": [
+			{
+				"internalType": "contract IERC20",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "_institusi",
+				"type": "address"
+			},
+			{
+				"internalType": "address",
+				"name": "_rewardManager",
+				"type": "address"
+			},
+			{
+				"internalType": "address",
+				"name": "_validator",
+				"type": "address"
+			},
+			{
+				"internalType": "address",
+				"name": "_rtkToken",
+				"type": "address"
+			}
+		],
+		"name": "setContracts",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "newOwner",
+				"type": "address"
+			}
+		],
+		"name": "transferOwnership",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "laporanId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "newStatus",
+				"type": "string"
+			},
+			{
+				"internalType": "address",
+				"name": "_validatorAddress",
+				"type": "address"
+			}
+		],
+		"name": "updateStatus",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "validatorContract",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	}
+];
+export const VALIDATOR_ABI = [
+	{
+		"inputs": [],
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "owner",
+				"type": "address"
+			}
+		],
+		"name": "OwnableInvalidOwner",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "account",
+				"type": "address"
+			}
+		],
+		"name": "OwnableUnauthorizedAccount",
+		"type": "error"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "userContract",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "institusiContract",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "rewardManager",
+				"type": "address"
+			}
+		],
+		"name": "ContractsSet",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "previousOwner",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "newOwner",
+				"type": "address"
+			}
+		],
+		"name": "OwnershipTransferred",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "laporanId",
+				"type": "uint256"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "validator",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "bool",
+				"name": "isValid",
+				"type": "bool"
+			}
+		],
+		"name": "ValidasiDilakukan",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "institusiId",
+				"type": "uint256"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "validator",
+				"type": "address"
+			}
+		],
+		"name": "ValidatorDiregistrasi",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "hasilValidasi",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "validator",
+				"type": "address"
+			},
+			{
+				"internalType": "bool",
+				"name": "isValid",
+				"type": "bool"
+			},
+			{
+				"internalType": "string",
+				"name": "deskripsi",
+				"type": "string"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "institusiContract",
+		"outputs": [
+			{
+				"internalType": "contract IInstitusiContract",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "institusiContractAddress",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "laporanSudahDivalidasi",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "owner",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "institusiId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address",
+				"name": "_validator",
+				"type": "address"
+			}
+		],
+		"name": "registerValidator",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "renounceOwnership",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "institusiId",
+				"type": "uint256"
+			}
+		],
+		"name": "resignFromInstitusi",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "rewardManager",
+		"outputs": [
+			{
+				"internalType": "contract IRewardManager",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "_user",
+				"type": "address"
+			},
+			{
+				"internalType": "address",
+				"name": "_institusi",
+				"type": "address"
+			},
+			{
+				"internalType": "address",
+				"name": "_rewardManager",
+				"type": "address"
+			}
+		],
+		"name": "setContracts",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "newOwner",
+				"type": "address"
+			}
+		],
+		"name": "transferOwnership",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "userContract",
+		"outputs": [
+			{
+				"internalType": "contract IUserContract",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "laporanId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bool",
+				"name": "isValid",
+				"type": "bool"
+			},
+			{
+				"internalType": "string",
+				"name": "deskripsi",
+				"type": "string"
+			}
+		],
+		"name": "validasiLaporan",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	}
+];
 export const RTKT_TOKEN_ABI = [
   {
     "inputs": [
@@ -214,314 +1069,620 @@ export const REWARD_MANAGER_ABI = [
 ];
 
 export const INSTITUSI_ABI = [
-  {
-    "inputs": [
-      {"internalType": "string", "name": "nama", "type": "string"},
-      {"internalType": "address", "name": "treasury", "type": "address"}
-    ],
-    "name": "daftarInstitusi",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{"internalType": "address", "name": "_validatorContract", "type": "address"}],
-    "name": "setValidatorContract",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{"internalType": "address", "name": "_userContract", "type": "address"}],
-    "name": "setUserContract",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{"internalType": "uint256", "name": "institusiId", "type": "uint256"}],
-    "name": "getInstitusiData",
-    "outputs": [
-      {"internalType": "string", "name": "nama", "type": "string"},
-      {"internalType": "address", "name": "admin", "type": "address"},
-      {"internalType": "address", "name": "treasury", "type": "address"}
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "institusiCounter",
-    "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {"internalType": "uint256", "name": "institusiId", "type": "uint256"},
-      {"internalType": "address", "name": "_validator", "type": "address"}
-    ],
-    "name": "tambahValidator",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {"internalType": "uint256", "name": "institusiId", "type": "uint256"},
-      {"internalType": "address", "name": "_pelapor", "type": "address"}
-    ],
-    "name": "tambahPelapor",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {"internalType": "uint256", "name": "", "type": "uint256"},
-      {"internalType": "address", "name": "", "type": "address"}
-    ],
-    "name": "isValidatorTerdaftar",
-    "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {"internalType": "uint256", "name": "", "type": "uint256"},
-      {"internalType": "address", "name": "", "type": "address"}
-    ],
-    "name": "isPelaporTerdaftar",
-    "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{"internalType": "uint256", "name": "institusiId", "type": "uint256"}],
-    "name": "getValidatorList",
-    "outputs": [{"internalType": "address[]", "name": "", "type": "address[]"}],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {"internalType": "uint256", "name": "institusiId", "type": "uint256"},
-      {"internalType": "address", "name": "_validator", "type": "address"}
-    ],
-    "name": "removeValidator",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{"internalType": "address", "name": "", "type": "address"}],
-    "name": "validatorReputation",
-    "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {"internalType": "address", "name": "validator", "type": "address"},
-      {"internalType": "uint256", "name": "score", "type": "uint256"}
-    ],
-    "name": "updateReputation",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {"internalType": "uint256", "name": "institusiId", "type": "uint256"},
-      {"internalType": "address", "name": "validator", "type": "address"},
-      {"internalType": "uint256", "name": "amount", "type": "uint256"}
-    ],
-    "name": "hukumValidatorCurang",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {"internalType": "uint256", "name": "laporanId", "type": "uint256"},
-      {"internalType": "bool", "name": "userMenang", "type": "bool"}
-    ],
-    "name": "finalisasiBanding",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  }
-];
-
-export const USER_ABI = [
-  {
-    "inputs": [
-      {"internalType": "uint256", "name": "institusiId", "type": "uint256"},
-      {"internalType": "string", "name": "judul", "type": "string"},
-      {"internalType": "string", "name": "deskripsi", "type": "string"}
-    ],
-    "name": "buatLaporan",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {"internalType": "address", "name": "_institusi", "type": "address"},
-      {"internalType": "address", "name": "_rewardManager", "type": "address"},
-      {"internalType": "address", "name": "_validator", "type": "address"},
-      {"internalType": "address", "name": "_rtkToken", "type": "address"}
-    ],
-    "name": "setContracts",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "institusiContract",
-    "outputs": [{"internalType": "address", "name": "", "type": "address"}],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "rewardManager",
-    "outputs": [{"internalType": "address", "name": "", "type": "address"}],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "validatorContract",
-    "outputs": [{"internalType": "address", "name": "", "type": "address"}],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "rtkToken",
-    "outputs": [{"internalType": "address", "name": "", "type": "address"}],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{"internalType": "uint256", "name": "laporanId", "type": "uint256"}],
-    "name": "ajukanBanding",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-    "name": "laporan",
-    "outputs": [
-      {"internalType": "uint256", "name": "laporanId", "type": "uint256"},
-      {"internalType": "uint256", "name": "institusiId", "type": "uint256"},
-      {"internalType": "address", "name": "pelapor", "type": "address"},
-      {"internalType": "string", "name": "judul", "type": "string"},
-      {"internalType": "string", "name": "deskripsi", "type": "string"},
-      {"internalType": "string", "name": "status", "type": "string"},
-      {"internalType": "address", "name": "validatorAddress", "type": "address"},
-      {"internalType": "address", "name": "assignedValidator", "type": "address"},
-      {"internalType": "uint64", "name": "creationTimestamp", "type": "uint64"}
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "laporanCounter",
-    "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{"internalType": "uint256", "name": "laporanId", "type": "uint256"}],
-    "name": "getLaporanDetails",
-    "outputs": [
-      {"internalType": "uint256", "name": "laporanId", "type": "uint256"},
-      {"internalType": "uint256", "name": "institusiId", "type": "uint256"},
-      {"internalType": "address", "name": "pelapor", "type": "address"},
-      {"internalType": "string", "name": "judul", "type": "string"},
-      {"internalType": "string", "name": "deskripsi", "type": "string"},
-      {"internalType": "string", "name": "status", "type": "string"},
-      {"internalType": "address", "name": "validatorAddress", "type": "address"},
-      {"internalType": "address", "name": "assignedValidator", "type": "address"},
-      {"internalType": "uint64", "name": "creationTimestamp", "type": "uint64"}
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {"internalType": "uint256", "name": "laporanId", "type": "uint256"},
-      {"internalType": "bool", "name": "userMenang", "type": "bool"}
-    ],
-    "name": "finalisasiBanding",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-    "name": "isBanding",
-    "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "STAKE_BANDING_AMOUNT",
-    "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{"internalType": "address", "name": "", "type": "address"}],
-    "name": "activeAssignmentsCount",
-    "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-    "stateMutability": "view",
-    "type": "function"
-  }
-];
-
-export const VALIDATOR_ABI = [
-  {
-    "inputs": [
-      {"internalType": "uint256", "name": "laporanId", "type": "uint256"},
-      {"internalType": "bool", "name": "isValid", "type": "bool"},
-      {"internalType": "string", "name": "deskripsi", "type": "string"}
-    ],
-    "name": "validasiLaporan",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{"internalType": "uint256", "name": "institusiId", "type": "uint256"}],
-    "name": "resignFromInstitusi",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-    "name": "hasilValidasi",
-    "outputs": [
-      {"internalType": "bool", "name": "isValid", "type": "bool"},
-      {"internalType": "string", "name": "deskripsi", "type": "string"},
-      {"internalType": "address", "name": "validator", "type": "address"},
-      {"internalType": "uint64", "name": "timestamp", "type": "uint64"}
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-    "name": "laporanSudahDivalidasi",
-    "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
-    "stateMutability": "view",
-    "type": "function"
-  }
-];
+	{
+		"inputs": [],
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "owner",
+				"type": "address"
+			}
+		],
+		"name": "OwnableInvalidOwner",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "account",
+				"type": "address"
+			}
+		],
+		"name": "OwnableUnauthorizedAccount",
+		"type": "error"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "validatorContractAddress",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "rewardManagerAddress",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "userContractAddress",
+				"type": "address"
+			}
+		],
+		"name": "ContractsSet",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "institusiId",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "admin",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "nama",
+				"type": "string"
+			},
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "treasury",
+				"type": "address"
+			}
+		],
+		"name": "InstitusiBaru",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "previousOwner",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "newOwner",
+				"type": "address"
+			}
+		],
+		"name": "OwnershipTransferred",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "institusiId",
+				"type": "uint256"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "pelapor",
+				"type": "address"
+			}
+		],
+		"name": "PelaporDitambahkan",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "validator",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "newReputation",
+				"type": "uint256"
+			}
+		],
+		"name": "ReputasiDiperbarui",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "institusiId",
+				"type": "uint256"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "validator",
+				"type": "address"
+			}
+		],
+		"name": "ValidatorDihapus",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "institusiId",
+				"type": "uint256"
+			},
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "validator",
+				"type": "address"
+			}
+		],
+		"name": "ValidatorDitambahkan",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "laporanId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bool",
+				"name": "userMenang",
+				"type": "bool"
+			}
+		],
+		"name": "adminFinalisasiBanding",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "laporanId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "level",
+				"type": "uint256"
+			}
+		],
+		"name": "adminSetContribution",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "_nama",
+				"type": "string"
+			},
+			{
+				"internalType": "address",
+				"name": "_treasury",
+				"type": "address"
+			}
+		],
+		"name": "daftarInstitusi",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "institusiId",
+				"type": "uint256"
+			}
+		],
+		"name": "getInstitusiData",
+		"outputs": [
+			{
+				"internalType": "string",
+				"name": "nama",
+				"type": "string"
+			},
+			{
+				"internalType": "address",
+				"name": "admin",
+				"type": "address"
+			},
+			{
+				"internalType": "address",
+				"name": "treasury",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "institusiId",
+				"type": "uint256"
+			}
+		],
+		"name": "getValidatorList",
+		"outputs": [
+			{
+				"internalType": "address[]",
+				"name": "",
+				"type": "address[]"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "institusiId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address",
+				"name": "validator",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			}
+		],
+		"name": "hukumValidatorCurang",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "institusi",
+		"outputs": [
+			{
+				"internalType": "string",
+				"name": "nama",
+				"type": "string"
+			},
+			{
+				"internalType": "address",
+				"name": "admin",
+				"type": "address"
+			},
+			{
+				"internalType": "address",
+				"name": "treasury",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "institusiCounter",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"name": "isPelaporTerdaftar",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"name": "isValidatorTerdaftar",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "owner",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "institusiId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address",
+				"name": "validatorAddress",
+				"type": "address"
+			}
+		],
+		"name": "removeValidator",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "renounceOwnership",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "rewardManager",
+		"outputs": [
+			{
+				"internalType": "contract IRewardManager",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "_validatorContract",
+				"type": "address"
+			},
+			{
+				"internalType": "address",
+				"name": "_rewardManagerAddress",
+				"type": "address"
+			},
+			{
+				"internalType": "address",
+				"name": "_userContract",
+				"type": "address"
+			}
+		],
+		"name": "setContracts",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "institusiId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address",
+				"name": "_pelapor",
+				"type": "address"
+			}
+		],
+		"name": "tambahPelapor",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "institusiId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address",
+				"name": "_validator",
+				"type": "address"
+			}
+		],
+		"name": "tambahValidator",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "newOwner",
+				"type": "address"
+			}
+		],
+		"name": "transferOwnership",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "validator",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "score",
+				"type": "uint256"
+			}
+		],
+		"name": "updateReputation",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "userContract",
+		"outputs": [
+			{
+				"internalType": "contract IUserContract",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "validatorContract",
+		"outputs": [
+			{
+				"internalType": "contract IValidatorContract",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "validatorContractAddress",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "validatorList",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"name": "validatorReputation",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	}
+]

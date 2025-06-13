@@ -1,5 +1,3 @@
-const { ethers } = require('ethers');
-
 // Simple test to verify the appeal logic is fixed
 async function testAppealLogic() {
   console.log('=== TESTING FIXED APPEAL LOGIC ===');

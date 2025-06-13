@@ -320,25 +320,47 @@ export class ContractService {
   }
 
   async setContributionLevel(laporanId: number, level: number): Promise<ethers.ContractTransactionResponse> {
-    console.log(`=== Attempting to set contribution level for report ${laporanId} to level ${level} ===`);
+    console.log('=== SET CONTRIBUTION LEVEL ===');
+    console.log('LaporanId:', laporanId);
+    console.log('Level:', level);
     
-    // This functionality is currently not available in the deployed smart contracts
-    // The RewardManager.setContributionLevel function can only be called by the Institution contract
-    // But the Institution contract doesn't have a function to allow admins to set contribution levels
+    // Get signer address for permission check
+    const signerAddress = await this.signer.getAddress();
+    console.log('Signer address:', signerAddress);
     
-    throw new Error(`
-      Smart Contract Limitation: The contribution level setting functionality is not available in the current smart contract deployment.
+    // Get report details to check institution ID
+    const laporan = await this.getLaporan(laporanId);
+    const institusiId = Number(laporan.institusiId);
+    console.log('Report institution ID:', institusiId);
+    
+    // Check if signer is admin of the institution
+    try {
+      const [, admin] = await this.getInstitusiData(institusiId);
+      console.log('Institution admin:', admin);
+      console.log('Is admin?', admin.toLowerCase() === signerAddress.toLowerCase());
       
-      The RewardManager contract has a setContributionLevel function but it can only be called by the Institution contract address.
-      However, the Institution contract doesn't have a function that allows admins to set contribution levels.
-      
-      To enable this functionality, the Institution contract would need to be updated with a function like:
-      function setValidatorContribution(uint laporanId, uint level) external onlyAdmin(getReportInstitution(laporanId)) {
-          rewardManager.setContributionLevel(laporanId, level);
+      if (admin.toLowerCase() !== signerAddress.toLowerCase()) {
+        throw new Error(`Hanya admin institusi yang dapat mengatur level kontribusi. Admin: ${admin}, Signer: ${signerAddress}`);
       }
-      
-      For now, validated reports can be viewed but contribution levels cannot be set through the UI.
-    `);
+    } catch (error) {
+      console.error('Error checking admin permissions:', error);
+      throw new Error(`Gagal memeriksa izin admin: ${error.message}`);
+    }
+    
+    // Validate level range (typically 1-5 based on common contribution systems)
+    if (level < 1 || level > 5) {
+      throw new Error('Level kontribusi harus antara 1-5');
+    }
+    
+    console.log('All validations passed, calling adminSetContribution...');
+    
+    // Use the new adminSetContribution function from Institusi contract
+    const institusiContract = new ethers.Contract(CONTRACT_ADDRESSES.institusi, INSTITUSI_ABI, this.signer);
+    
+    return this.executeTransaction(
+      () => institusiContract.adminSetContribution(laporanId, level),
+      'adminSetContribution'
+    );
   }
 
   async hasValidatorClaimedReward(laporanId: number, validator: string): Promise<boolean> {
@@ -470,12 +492,9 @@ export class ContractService {
   }
 
   async finalisasiBanding(laporanId: number, userMenang: boolean): Promise<ethers.ContractTransactionResponse> {
-    console.log('=== FINALISASI BANDING DEBUG ===');
+    console.log('=== FINALISASI BANDING USING NEW ADMIN FUNCTION ===');
     console.log('LaporanId:', laporanId);
     console.log('UserMenang:', userMenang);
-    
-    // Use Institusi Contract instead of User Contract for finalisasiBanding
-    const contract = new ethers.Contract(CONTRACT_ADDRESSES.institusi, INSTITUSI_ABI, this.signer);
     
     // Get signer address for permission check
     const signerAddress = await this.signer.getAddress();
@@ -513,11 +532,14 @@ export class ContractService {
       throw new Error(`Status laporan tidak valid untuk finalisasi banding: ${laporan.status}. Laporan harus berstatus 'Banding' untuk dapat difinalisasi.`);
     }
     
-    console.log('All validations passed, calling contract function...');
+    console.log('All validations passed, calling adminFinalisasiBanding...');
+    
+    // Use the new adminFinalisasiBanding function from Institusi contract
+    const institusiContract = new ethers.Contract(CONTRACT_ADDRESSES.institusi, INSTITUSI_ABI, this.signer);
     
     return this.executeTransaction(
-      () => contract.finalisasiBanding(laporanId, userMenang),
-      'finalisasiBanding'
+      () => institusiContract.adminFinalisasiBanding(laporanId, userMenang),
+      'adminFinalisasiBanding'
     );
   }
 

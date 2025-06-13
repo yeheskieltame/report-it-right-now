@@ -966,11 +966,6 @@ const AdminDashboard: React.FC = () => {
       return;
     }
 
-    // Show informative message about smart contract limitation
-    toast.error('Fitur ini tidak tersedia: Smart contract saat ini tidak mendukung pengaturan level kontribusi dari UI admin. Fungsi setContributionLevel di RewardManager hanya dapat dipanggil oleh Institusi Contract, tetapi Institusi Contract tidak memiliki fungsi untuk admin mengatur level kontribusi.');
-    
-    return; // Disable the functionality
-
     // Additional validation to ensure the report is validated
     const report = validatedReports.find(r => r.id === reportId);
     console.log(`Setting contribution for report ${reportId}:`, report);
@@ -1025,8 +1020,8 @@ const AdminDashboard: React.FC = () => {
     try {
       setLoading(true);
       
-      // Debug appeal finalization before attempting
-      console.log('=== DEBUGGING APPEAL FINALIZATION ===');
+      // Check admin permissions and appeal status
+      console.log('=== PROCESSING APPEAL DECISION ===');
       const debugInfo = await contractService.debugAppealFinalization(reportId);
       console.log('Debug info:', debugInfo);
       
@@ -1037,11 +1032,6 @@ const AdminDashboard: React.FC = () => {
       
       if (!debugInfo.isBanding) {
         toast.error('Laporan ini bukan kasus banding');
-        return;
-      }
-      
-      if (!debugInfo.functionExists) {
-        toast.error('Fungsi finalisasiBanding tidak tersedia di kontrak');
         return;
       }
       
@@ -1478,19 +1468,16 @@ const AdminDashboard: React.FC = () => {
                               ...prev,
                               [report.id]: parseInt(e.target.value) || 1
                             }))}
-                            disabled={true}
+                            disabled={loading}
                           />
                           <Button 
                             onClick={() => handleSetContribution(report.id)}
                             size="sm"
-                            disabled={true}
+                            disabled={loading}
                             variant="secondary"
                           >
                             Set Contribution
                           </Button>
-                        </div>
-                        <div className="text-xs text-amber-600 bg-amber-50 p-2 rounded border border-amber-200">
-                          ⚠️ Fitur pengaturan level kontribusi tidak tersedia karena keterbatasan smart contract saat ini
                         </div>
                       </div>
                     </div>
@@ -1575,7 +1562,6 @@ const AdminDashboard: React.FC = () => {
                           >
                             <CheckCircle2 className="w-4 h-4 mr-2" />
                             Approve Appeal
-                            <span className="text-xs ml-2">(Mark as Valid)</span>
                           </Button>
                           
                           <Button
@@ -1585,7 +1571,6 @@ const AdminDashboard: React.FC = () => {
                           >
                             <X className="w-4 h-4 mr-2" />
                             Reject Appeal
-                            <span className="text-xs ml-2">(Keep Invalid)</span>
                           </Button>
                         </div>
                         
