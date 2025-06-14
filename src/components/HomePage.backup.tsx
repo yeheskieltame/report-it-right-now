@@ -251,7 +251,7 @@ const HomePage: React.FC = () => {
                               <FileText className="w-4 h-4 text-blue-600" />
                             </div>
                             <div>
-                              <div className="text-lg font-bold text-gray-900">127</div>
+                              <div className="text-xl font-bold text-gray-900">24</div>
                               <div className="text-xs text-gray-500">Reports</div>
                             </div>
                           </div>
@@ -259,11 +259,11 @@ const HomePage: React.FC = () => {
                         <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
-                              <Users className="w-4 h-4 text-purple-600" />
+                              <Shield className="w-4 h-4 text-purple-600" />
                             </div>
                             <div>
-                              <div className="text-lg font-bold text-gray-900">45</div>
-                              <div className="text-xs text-gray-500">Validators</div>
+                              <div className="text-xl font-bold text-gray-900">12</div>
+                              <div className="text-xs text-gray-500">Validated</div>
                             </div>
                           </div>
                         </div>
@@ -271,6 +271,7 @@ const HomePage: React.FC = () => {
 
                       {/* Recent Activity */}
                       <div className="space-y-3">
+                        <div className="text-sm font-medium text-gray-700 mb-3">Recent Activity</div>
                         <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
                           <div className="flex items-center gap-3">
                             <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
@@ -328,7 +329,7 @@ const HomePage: React.FC = () => {
               </div>
               <div className="text-center group">
                 <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-lg transition-all duration-300 group-hover:scale-105">
-                  <div className="text-4xl font-bold bg-gradient-to-r from-green-500 to-emerald-500 bg-clip-text text-transparent mb-2">500+</div>
+                  <div className="text-4xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent mb-2">500+</div>
                   <div className="text-gray-600">{t('landing.stats.validators')}</div>
                 </div>
               </div>
@@ -343,16 +344,19 @@ const HomePage: React.FC = () => {
         </section>
 
         {/* Features Section */}
-        <section id="features" className="relative py-24 bg-gradient-to-br from-white via-purple-50/30 to-blue-50/30">
+        <section id="features" className="relative py-16 md:py-24 bg-white">
           <div className="max-w-7xl mx-auto px-6">
-            <div className="text-center mb-16">
-              <h2 className="text-4xl font-bold text-gray-900 mb-4">{t('landing.features.title')}</h2>
-              <p className="text-xl text-gray-600 max-w-2xl mx-auto">{t('landing.features.subtitle')}</p>
+            <div className="text-center mb-12 md:mb-16">
+              <div className="inline-block bg-gradient-to-r from-purple-100 to-blue-100 text-purple-700 px-4 py-2 rounded-full text-sm font-medium mb-6">
+                Platform Features
+              </div>
+              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">{t('landing.features.title')}</h2>
+              <p className="text-lg md:text-xl text-gray-600 max-w-2xl mx-auto">{t('landing.features.subtitle')}</p>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {/* Feature Cards */}
-              <Card className="bg-white border border-gray-200 hover:shadow-xl transition-all duration-300 group hover:scale-105">
+              <Card className="bg-white border border-gray-200 hover:border-purple-200 hover:shadow-lg transition-all duration-300 group">
                 <CardContent className="p-8 text-center">
                   <div className="bg-gradient-to-r from-blue-100 to-purple-100 rounded-2xl w-16 h-16 mx-auto mb-6 flex items-center justify-center group-hover:scale-110 transition-transform">
                     <Shield className="w-8 h-8 text-blue-600" />
@@ -362,7 +366,7 @@ const HomePage: React.FC = () => {
                 </CardContent>
               </Card>
 
-              <Card className="bg-white border border-gray-200 hover:shadow-xl transition-all duration-300 group hover:scale-105">
+              <Card className="bg-white border border-gray-200 hover:border-purple-200 hover:shadow-lg transition-all duration-300 group">
                 <CardContent className="p-8 text-center">
                   <div className="bg-gradient-to-r from-purple-100 to-pink-100 rounded-2xl w-16 h-16 mx-auto mb-6 flex items-center justify-center group-hover:scale-110 transition-transform">
                     <Users className="w-8 h-8 text-purple-600" />
@@ -372,9 +376,9 @@ const HomePage: React.FC = () => {
                 </CardContent>
               </Card>
 
-              <Card className="bg-white border border-gray-200 hover:shadow-xl transition-all duration-300 group hover:scale-105">
+              <Card className="bg-white border border-gray-200 hover:border-purple-200 hover:shadow-lg transition-all duration-300 group">
                 <CardContent className="p-8 text-center">
-                  <div className="bg-gradient-to-r from-green-100 to-emerald-100 rounded-2xl w-16 h-16 mx-auto mb-6 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <div className="bg-gradient-to-r from-green-100 to-blue-100 rounded-2xl w-16 h-16 mx-auto mb-6 flex items-center justify-center group-hover:scale-110 transition-transform">
                     <Lock className="w-8 h-8 text-green-600" />
                   </div>
                   <h3 className="text-xl font-semibold text-gray-900 mb-4">{t('features.immutable.title')}</h3>
@@ -382,17 +386,17 @@ const HomePage: React.FC = () => {
                 </CardContent>
               </Card>
 
-              <Card className="bg-white border border-gray-200 hover:shadow-xl transition-all duration-300 group hover:scale-105">
+              <Card className="bg-white border border-gray-200 hover:border-purple-200 hover:shadow-lg transition-all duration-300 group">
                 <CardContent className="p-8 text-center">
                   <div className="bg-gradient-to-r from-yellow-100 to-orange-100 rounded-2xl w-16 h-16 mx-auto mb-6 flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <Award className="w-8 h-8 text-orange-600" />
+                    <Award className="w-8 h-8 text-yellow-600" />
                   </div>
                   <h3 className="text-xl font-semibold text-gray-900 mb-4">{t('features.rewards.title')}</h3>
                   <p className="text-gray-600 leading-relaxed">{t('features.rewards.description')}</p>
                 </CardContent>
               </Card>
 
-              <Card className="bg-white border border-gray-200 hover:shadow-xl transition-all duration-300 group hover:scale-105">
+              <Card className="bg-white border border-gray-200 hover:border-purple-200 hover:shadow-lg transition-all duration-300 group">
                 <CardContent className="p-8 text-center">
                   <div className="bg-gradient-to-r from-cyan-100 to-blue-100 rounded-2xl w-16 h-16 mx-auto mb-6 flex items-center justify-center group-hover:scale-110 transition-transform">
                     <Globe className="w-8 h-8 text-cyan-600" />
@@ -402,10 +406,10 @@ const HomePage: React.FC = () => {
                 </CardContent>
               </Card>
 
-              <Card className="bg-white border border-gray-200 hover:shadow-xl transition-all duration-300 group hover:scale-105">
+              <Card className="bg-white border border-gray-200 hover:border-purple-200 hover:shadow-lg transition-all duration-300 group">
                 <CardContent className="p-8 text-center">
                   <div className="bg-gradient-to-r from-orange-100 to-red-100 rounded-2xl w-16 h-16 mx-auto mb-6 flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <Zap className="w-8 h-8 text-red-600" />
+                    <Zap className="w-8 h-8 text-orange-600" />
                   </div>
                   <h3 className="text-xl font-semibold text-gray-900 mb-4">{t('features.realtime.title')}</h3>
                   <p className="text-gray-600 leading-relaxed">{t('features.realtime.description')}</p>
@@ -416,36 +420,170 @@ const HomePage: React.FC = () => {
         </section>
 
         {/* How It Works Section */}
-        <section className="relative py-24 bg-white/5 backdrop-blur-sm">
+        <section className="relative py-16 md:py-24 bg-gradient-to-r from-gray-50 via-purple-50 to-blue-50">
           <div className="max-w-7xl mx-auto px-6">
-            <div className="text-center mb-16">
-              <h2 className="text-4xl font-bold text-white mb-4">{t('landing.howItWorks.title')}</h2>
-              <p className="text-xl text-gray-300 max-w-2xl mx-auto">{t('landing.howItWorks.subtitle')}</p>
+            <div className="text-center mb-12 md:mb-16">
+              <div className="inline-block bg-gradient-to-r from-purple-100 to-blue-100 text-purple-700 px-4 py-2 rounded-full text-sm font-medium mb-6">
+                Simple Process
+              </div>
+              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">{t('landing.howItWorks.title')}</h2>
+              <p className="text-lg md:text-xl text-gray-600 max-w-2xl mx-auto">{t('landing.howItWorks.subtitle')}</p>
             </div>
-            
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <div className="text-center">
-                <div className="relative mb-6">
-                  <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-full w-20 h-20 mx-auto flex items-center justify-center text-white text-2xl font-bold shadow-2xl">
-                    1
+              <div className="text-center group">
+                <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-200 hover:shadow-lg transition-all duration-300 group-hover:scale-105">
+                  <div className="relative mb-6">
+                    <div className="bg-gradient-to-r from-purple-500 to-blue-500 rounded-full w-20 h-20 mx-auto flex items-center justify-center text-white text-2xl font-bold shadow-lg">
+                      1
+                    </div>
+                    {/* Connector line - hidden on mobile */}
+                    <div className="hidden md:block absolute top-10 left-full w-full h-0.5 bg-gradient-to-r from-purple-300 to-blue-300"></div>
                   </div>
-                  {/* Connector line - hidden on mobile */}
-                  <div className="hidden md:block absolute top-10 left-full w-full h-0.5 bg-gradient-to-r from-blue-500 to-purple-600 opacity-30"></div>
+                  <h3 className="text-2xl font-semibold text-gray-900 mb-4">{t('landing.howItWorks.step1.title')}</h3>
+                  <p className="text-gray-600 leading-relaxed">{t('landing.howItWorks.step1.description')}</p>
                 </div>
-                <h3 className="text-2xl font-semibold text-white mb-4">{t('landing.howItWorks.step1.title')}</h3>
-                <p className="text-gray-400 leading-relaxed">{t('landing.howItWorks.step1.description')}</p>
               </div>
 
-              <div className="text-center">
-                <div className="relative mb-6">
-                  <div className="bg-gradient-to-r from-purple-500 to-pink-600 rounded-full w-20 h-20 mx-auto flex items-center justify-center text-white text-2xl font-bold shadow-2xl">
-                    2
+              <div className="text-center group">
+                <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-200 hover:shadow-lg transition-all duration-300 group-hover:scale-105">
+                  <div className="relative mb-6">
+                    <div className="bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full w-20 h-20 mx-auto flex items-center justify-center text-white text-2xl font-bold shadow-lg">
+                      2
+                    </div>
+                    <div className="hidden md:block absolute top-10 left-full w-full h-0.5 bg-gradient-to-r from-blue-300 to-cyan-300"></div>
                   </div>
-                  <div className="hidden md:block absolute top-10 left-full w-full h-0.5 bg-gradient-to-r from-purple-500 to-pink-600 opacity-30"></div>
+                  <h3 className="text-2xl font-semibold text-gray-900 mb-4">{t('landing.howItWorks.step2.title')}</h3>
+                  <p className="text-gray-600 leading-relaxed">{t('landing.howItWorks.step2.description')}</p>
                 </div>
-                <h3 className="text-2xl font-semibold text-white mb-4">{t('landing.howItWorks.step2.title')}</h3>
-                <p className="text-gray-400 leading-relaxed">{t('landing.howItWorks.step2.description')}</p>
               </div>
+
+              <div className="text-center group">
+                <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-200 hover:shadow-lg transition-all duration-300 group-hover:scale-105">
+                  <div className="relative mb-6">
+                    <div className="bg-gradient-to-r from-orange-500 to-yellow-500 rounded-full w-20 h-20 mx-auto flex items-center justify-center text-white text-2xl font-bold shadow-lg">
+                      3
+                    </div>
+                  </div>
+                  <h3 className="text-2xl font-semibold text-gray-900 mb-4">{t('landing.howItWorks.step3.title')}</h3>
+                  <p className="text-gray-600 leading-relaxed">{t('landing.howItWorks.step3.description')}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Benefits Section */}
+        <section className="relative py-16 md:py-24 bg-white">
+          <div className="max-w-7xl mx-auto px-6">
+            <div className="text-center mb-12 md:mb-16">
+              <div className="inline-block bg-gradient-to-r from-orange-100 to-yellow-100 text-orange-700 px-4 py-2 rounded-full text-sm font-medium mb-6">
+                Partnership Benefits
+              </div>
+              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">{t('landing.benefits.title')}</h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {/* For Reporters */}
+              <Card className="bg-white border border-gray-200 hover:border-purple-200 hover:shadow-lg transition-all duration-300">
+                <CardHeader>
+                  <CardTitle className="text-2xl text-gray-900 text-center mb-4">
+                    <div className="w-12 h-12 bg-gradient-to-r from-blue-100 to-purple-100 rounded-2xl mx-auto mb-3 flex items-center justify-center">
+                      <FileText className="w-6 h-6 text-blue-600" />
+                    </div>
+                    {t('landing.benefits.reporters.title')}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-start gap-3">
+                    <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
+                    <p className="text-gray-600">{t('landing.benefits.reporters.list1')}</p>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
+                    <p className="text-gray-600">{t('landing.benefits.reporters.list2')}</p>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
+                    <p className="text-gray-600">{t('landing.benefits.reporters.list3')}</p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* For Validators */}
+              <Card className="bg-white border border-gray-200 hover:border-purple-200 hover:shadow-lg transition-all duration-300">
+                <CardHeader>
+                  <CardTitle className="text-2xl text-gray-900 text-center mb-4">
+                    <div className="w-12 h-12 bg-gradient-to-r from-green-100 to-blue-100 rounded-2xl mx-auto mb-3 flex items-center justify-center">
+                      <Shield className="w-6 h-6 text-green-600" />
+                    </div>
+                    {t('landing.benefits.validators.title')}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-start gap-3">
+                    <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
+                    <p className="text-gray-600">{t('landing.benefits.validators.list1')}</p>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
+                    <p className="text-gray-600">{t('landing.benefits.validators.list2')}</p>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
+                    <p className="text-gray-600">{t('landing.benefits.validators.list3')}</p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* For Institutions */}
+              <Card className="bg-white border border-gray-200 hover:border-purple-200 hover:shadow-lg transition-all duration-300">
+                <CardHeader>
+                  <CardTitle className="text-2xl text-gray-900 text-center mb-4">
+                    <div className="w-12 h-12 bg-gradient-to-r from-purple-100 to-pink-100 rounded-2xl mx-auto mb-3 flex items-center justify-center">
+                      <Building2 className="w-6 h-6 text-purple-600" />
+                    </div>
+                    {t('landing.benefits.institutions.title')}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-start gap-3">
+                    <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
+                    <p className="text-gray-600">{t('landing.benefits.institutions.list1')}</p>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
+                    <p className="text-gray-600">{t('landing.benefits.institutions.list2')}</p>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
+                    <p className="text-gray-600">{t('landing.benefits.institutions.list3')}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </section>
+
+        {/* Final CTA Section */}
+        <section className="relative py-16 md:py-24 bg-gradient-to-r from-purple-50 via-blue-50 to-orange-50">
+          <div className="max-w-4xl mx-auto text-center px-6">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6">
+              {t('landing.cta.title')}
+            </h2>
+            <p className="text-lg md:text-xl text-gray-600 mb-8 leading-relaxed">
+              {t('landing.cta.description')}
+            </p>
+            <Button 
+              size="lg" 
+              className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-8 md:px-12 py-3 md:py-4 text-lg md:text-xl font-semibold rounded-xl shadow-lg hover:shadow-purple-500/25 transition-all duration-300 group"
+            >
+              {t('landing.hero.cta')}
+              <ArrowRight className="w-5 h-5 md:w-6 md:h-6 ml-2 md:ml-3 group-hover:translate-x-1 transition-transform" />
+            </Button>
+          </div>
+        </section>
+      </div>
+    );
+  }
 
               <div className="text-center">
                 <div className="relative mb-6">
@@ -461,10 +599,10 @@ const HomePage: React.FC = () => {
         </section>
 
         {/* Benefits Section */}
-        <section className="relative py-24">
+        <section className="relative py-16 md:py-24">
           <div className="max-w-7xl mx-auto px-6">
-            <div className="text-center mb-16">
-              <h2 className="text-4xl font-bold text-white mb-4">{t('landing.benefits.title')}</h2>
+            <div className="text-center mb-12 md:mb-16">
+              <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">{t('landing.benefits.title')}</h2>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -544,20 +682,20 @@ const HomePage: React.FC = () => {
         </section>
 
         {/* Final CTA Section */}
-        <section className="relative py-16 md:py-24 bg-gradient-to-r from-purple-50 via-blue-50 to-orange-50">
+        <section className="relative py-16 md:py-24 bg-gradient-to-r from-blue-600/20 to-purple-600/20 backdrop-blur-sm">
           <div className="max-w-4xl mx-auto text-center px-6">
-            <h2 className="text-4xl font-bold text-gray-900 mb-6">
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">
               {t('landing.cta.title')}
             </h2>
-            <p className="text-xl text-gray-600 mb-8 leading-relaxed">
+            <p className="text-lg md:text-xl text-gray-300 mb-8 leading-relaxed">
               {t('landing.cta.description')}
             </p>
             <Button 
               size="lg" 
-              className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-12 py-4 text-xl font-semibold rounded-xl shadow-lg hover:shadow-purple-500/25 transition-all duration-300 group"
+              className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-8 md:px-12 py-3 md:py-4 text-lg md:text-xl font-semibold rounded-full shadow-2xl hover:shadow-blue-500/25 transition-all duration-300 group"
             >
               {t('landing.hero.cta')}
-              <ArrowRight className="w-6 h-6 ml-3 group-hover:translate-x-1 transition-transform" />
+              <ArrowRight className="w-5 h-5 md:w-6 md:h-6 ml-2 md:ml-3 group-hover:translate-x-1 transition-transform" />
             </Button>
           </div>
         </section>
