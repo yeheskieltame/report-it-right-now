@@ -23,7 +23,7 @@ interface PlatformStats {
 }
 
 const HomePage: React.FC = () => {
-  const { isConnected, address, contractService, role } = useWallet();
+  const { isConnected, address, contractService, role, connectWallet } = useWallet();
   const { t } = useLanguage();
   const [userInstitutions, setUserInstitutions] = useState<UserInstitution[]>([]);
   const [platformStats, setPlatformStats] = useState<PlatformStats>({
@@ -178,6 +178,7 @@ const HomePage: React.FC = () => {
                   <Button 
                     size="lg" 
                     className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-8 py-4 text-lg font-semibold rounded-xl shadow-lg hover:shadow-purple-500/25 transition-all duration-300 group"
+                    onClick={connectWallet}
                   >
                     {t('landing.hero.cta')}
                     <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
@@ -555,6 +556,7 @@ const HomePage: React.FC = () => {
             <Button 
               size="lg" 
               className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-12 py-4 text-xl font-semibold rounded-xl shadow-lg hover:shadow-purple-500/25 transition-all duration-300 group"
+              onClick={connectWallet}
             >
               {t('landing.hero.cta')}
               <ArrowRight className="w-6 h-6 ml-3 group-hover:translate-x-1 transition-transform" />
