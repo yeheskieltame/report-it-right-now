@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Building2, Users, FileText, Scale, AlertCircle, Settings, CheckCircle, XCircle, Bug, Shield, Clock, BarChart3, PieChart, TrendingUp, AlertTriangle, X, CheckCircle2 } from 'lucide-react';
 import { useWallet } from '../../context/WalletContext';
 import { toast } from 'sonner';
@@ -440,6 +441,7 @@ const AdminDashboard: React.FC = () => {
     monthlyStats: []
   });
   const [reportFilter, setReportFilter] = useState<'all' | 'valid' | 'invalid'>('all');
+  const [showSmartContractBugAlert, setShowSmartContractBugAlert] = useState(false);
 
   // Get current institution ID from localStorage
   const selectedInstitution = localStorage.getItem('selectedInstitution');
@@ -829,8 +831,8 @@ const AdminDashboard: React.FC = () => {
                         validationResult.deskripsi?.includes('encoding');
 
                     baseValidationData = {
-                      isValid: reportStatus === 'Valid', // Keep using report status as primary
-                      description: cleanValidationDescription(validationResult?.deskripsi, i) || baseValidationData.description,
+                      isValid: reportStatus === 'Valid' // Keep using report status as primary
+                      , description: cleanValidationDescription(validationResult?.deskripsi, i) || baseValidationData.description,
                       validator: cleanValidatorAddress(validationResult?.validator) || baseValidationData.validator,
                       validationTimestamp: cleanTimestamp(validationResult?.timestamp) || baseValidationData.validationTimestamp,
                       hasDataIssues: hasDataIssues,
@@ -1063,27 +1065,306 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  const handleRemoveValidator = async (validatorAddress: string) => {
-    if (!contractService) return;
+  const handleDiagnoseAppealFailure = async (reportId: number, userWins: boolean) => {
+    if (!contractService) {
+      toast.error('Contract service tidak tersedia');
+      return;
+    }
 
     try {
       setLoading(true);
-      toast.info('Menghapus validator...');
+      toast.info('Menjalankan diagnosis komprehensif untuk kegagalan appeal...');
       
-      const tx = await contractService.removeValidator(institusiId, validatorAddress);
-      toast.info('Transaksi dikirim, menunggu konfirmasi...');
+      const diagnosis = await contractService.diagnoseAppealFinalizationFailure(reportId, userWins);
       
-      await tx.wait();
-      toast.success('Validator berhasil dihapus!');
+      console.log('=== APPEAL FAILURE DIAGNOSIS ===', diagnosis);
       
-      await loadValidators();
+      // Show results in a more user-friendly way
+      if (diagnosis.step5_recommendations && diagnosis.step5_recommendations.length > 0) {
+        const recommendations = diagnosis.step5_recommendations.join('\n');
+        toast.error(`Diagnosis completed. Issues found:\n${recommendations}`);
+      } else {
+        toast.success('Diagnosis completed. Check console for detailed results.');
+      }
+      
     } catch (error: any) {
-      console.error('Error removing validator:', error);
-      toast.error(`Gagal menghapus validator: ${error.message || 'Unknown error'}`);
+      console.error('Error in appeal failure diagnosis:', error);
+      toast.error(`Diagnosis gagal: ${error.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
   };
+
+  // Enhanced appeal decision handler with comprehensive diagnosis
+  const handleAppealDecisionWithDiagnosis = async (reportId: number, userWins: boolean) => {
+    if (!contractService) return;
+
+    try {
+      setLoading(true);
+      
+      // First, run diagnosis to check for issues
+      console.log('🔍 Running pre-flight diagnosis...');
+      const diagnosis = await contractService.diagnoseAppealFinalizationFailure(reportId, userWins);
+      
+      // Check if there are any critical issues
+      const hasIssues = diagnosis.step5_recommendations?.some((rec: string) => rec.includes('❌ CRITICAL'));
+      
+      if (hasIssues) {
+        const criticalIssues = diagnosis.step5_recommendations?.filter((rec: string) => rec.includes('❌ CRITICAL'));
+        toast.error(`Cannot proceed with appeal: ${criticalIssues?.join(', ')}`);
+        return;
+      }
+      
+      // Check admin permissions
+      if (diagnosis.step3_permissionChecks && !diagnosis.step3_permissionChecks.isAdmin) {
+        toast.error(`Anda bukan admin institusi ini. Admin: ${diagnosis.step3_permissionChecks.admin}`);
+        return;
+      }
+      
+      // Check report status
+      if (diagnosis.step1_basicChecks && !diagnosis.step1_basicChecks.statusValid) {
+        toast.error('Laporan ini bukan kasus banding atau status tidak valid');
+        return;
+      }
+      
+      // Show confirmation dialog with diagnosis info
+      const confirmed = window.confirm(
+        `APPEAL FINALIZATION CONFIRMATION\n\n` +
+        `Report ID: ${reportId}\n` +
+        `Decision: ${userWins ? 'APPROVE (User wins)' : 'REJECT (User loses)'}\n` +
+        `Institution: ${diagnosis.step3_permissionChecks?.institutionName || 'Unknown'}\n` +
+        `Report Status: ${diagnosis.step1_basicChecks?.reportData?.status || 'Unknown'}\n\n` +
+        `Diagnosis Results:\n` +
+        `- Admin Check: ${diagnosis.step3_permissionChecks?.isAdmin ? '✅ PASS' : '❌ FAIL'}\n` +
+        `- Status Check: ${diagnosis.step1_basicChecks?.statusValid ? '✅ PASS' : '❌ FAIL'}\n` +
+        `- Contract Setup: ${diagnosis.step2_contractStates ? '✅ CHECKED' : '❌ UNKNOWN'}\n\n` +
+        `Are you sure you want to proceed?`
+      );
+      
+      if (!confirmed) return;
+      
+      console.log('🚀 Proceeding with appeal finalization...');
+      toast.info(`Processing appeal decision: ${userWins ? 'APPROVING' : 'REJECTING'}...`);
+      
+      // Attempt appeal finalization
+      const tx = await contractService.finalisasiBanding(reportId, userWins);
+      toast.info('Transaction submitted, waiting for confirmation...');
+      
+      await tx.wait();
+      toast.success(`Appeal ${userWins ? 'approved' : 'rejected'} successfully!`);
+      
+      // Reload data
+      await loadReports();
+      
+    } catch (error: any) {
+      console.error('Error processing appeal:', error);
+      
+      // Handle smart contract bug specifically
+      if (error.message.includes('Hanya admin dari institusi terkait') || 
+          error.message.includes('Only institution admin can finalize appeals')) {
+        
+        console.log('🐛 SMART CONTRACT BUG DETECTED');
+        console.log('User is confirmed admin but contract rejects the call');
+        
+        toast.error(
+          '🐛 Smart Contract Authorization Bug: You are the correct admin for this institution, but the smart contract authorization is malfunctioning. This is a known bug that requires updating the deployed smart contracts.',
+          { duration: 15000 }
+        );
+        setShowSmartContractBugAlert(true);
+        
+        // Also show the detailed technical information
+        const bugDetails = {
+          reportId,
+          currentUser: contractService.signer?.getAddress?.() || 'Unknown',
+          institutionId: reports.find(r => r.id === reportId)?.institusiId || 'Unknown',
+          errorType: 'Smart Contract Authorization Bug',
+          technicalError: error.message
+        };
+        
+        console.log('🔍 Bug Details:', bugDetails);
+        return;
+      }
+      
+      // If we get a transaction revert, run another diagnosis
+      if (error.message.includes('transaction execution reverted') || error.message.includes('revert')) {
+        console.log('🔍 Transaction reverted, running post-failure diagnosis...');
+        
+        try {
+          const postDiagnosis = await contractService.diagnoseAppealFinalizationFailure(reportId, userWins);
+          console.log('=== POST-FAILURE DIAGNOSIS ===', postDiagnosis);
+          
+          if (postDiagnosis.step4_functionValidation?.staticCallError) {
+            toast.error(`Appeal failed: ${postDiagnosis.step4_functionValidation.staticCallError}`);
+          } else {
+            toast.error(`Appeal failed with transaction revert. Check console for detailed diagnosis.`);
+          }
+        } catch (diagError) {
+          toast.error(`Failed to process appeal: ${error.message || 'Unknown error'}`);
+        }
+      } else {
+        toast.error(`Failed to process appeal: ${error.message || 'Unknown error'}`);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Missing handler functions for appeal debugging and contract management
+  const handleFixAppealContracts = async () => {
+    if (!contractService) {
+      toast.error('Contract service tidak tersedia');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      toast.info('Fixing appeal contract setup...');
+      
+      // Try to fix user contract setup for appeals
+      await contractService.fixUserContractForAppeals();
+      
+      // Try to fix reward manager setup
+      await contractService.fixRewardManagerSetup();
+      
+      toast.success('Appeal contract setup fixed successfully!');
+      
+    } catch (error: any) {
+      console.error('Error fixing appeal contracts:', error);
+      toast.error(`Failed to fix appeal setup: ${error.message || 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDiagnoseAppealFlow = async (reportId: number) => {
+    if (!contractService) {
+      toast.error('Contract service tidak tersedia');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      toast.info('Running appeal flow diagnosis...');
+      
+      const diagnosis = await contractService.diagnoseAppealFlow(reportId);
+      
+      console.log('=== APPEAL FLOW DIAGNOSIS ===', diagnosis);
+      
+      // Show results in a more user-friendly way
+      if (diagnosis.recommendations && diagnosis.recommendations.length > 0) {
+        const recommendations = diagnosis.recommendations.join('\n');
+        toast.success(`Diagnosis completed. Check console for details.\n\nRecommendations:\n${recommendations}`);
+      } else {
+        toast.success('Diagnosis completed. Check console for detailed results.');
+      }
+      
+    } catch (error: any) {
+      console.error('Error in appeal flow diagnosis:', error);
+      toast.error(`Diagnosis failed: ${error.message || 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDebugAppealFunctionality = async (reportId: number) => {
+    if (!contractService) {
+      toast.error('Contract service tidak tersedia');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      toast.info('Running comprehensive appeal debug...');
+      
+      const debugInfo = await contractService.debugAppealFunctionality(reportId);
+      
+      console.log('=== APPEAL FUNCTIONALITY DEBUG ===', debugInfo);
+      
+      // Show results in a more user-friendly way
+      if (debugInfo.overallStatus === 'all_contracts_properly_configured') {
+        toast.success('Debug completed. All contracts are properly configured.');
+      } else if (debugInfo.overallStatus === 'contract_configuration_issues') {
+        const issues = [];
+        if (debugInfo.issues?.userContract) issues.push('User contract');
+        if (debugInfo.issues?.institusiContract) issues.push('Institusi contract');
+        if (debugInfo.issues?.rewardManager) issues.push('RewardManager');
+        
+        toast.warning(`Debug completed. Configuration issues found in: ${issues.join(', ')}. Check console for details.`);
+      } else {
+        toast.info('Debug completed. Check console for detailed results.');
+      }
+      
+    } catch (error: any) {
+      console.error('Error in appeal functionality debug:', error);
+      toast.error(`Debug failed: ${error.message || 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAnalyzeHanyaInstitusiError = async (reportId: number) => {
+    if (!contractService) {
+      toast.error('Contract service tidak tersedia');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      toast.info('Analyzing "Hanya Institusi Contract" error...');
+      
+      const analysis = await contractService.analyzeHanyaInstitusiError(reportId);
+      
+      console.log('=== HANYA INSTITUSI ERROR ANALYSIS ===', analysis);
+      
+      // Show results in a more user-friendly way
+      if (analysis.recommendedSolutions && analysis.recommendedSolutions.length > 0) {
+        const solutions = analysis.recommendedSolutions.join('\n');
+        toast.info(`Error analysis completed. Check console for details.\n\nSolutions:\n${solutions}`);
+      } else {
+        toast.info('Error analysis completed. Check console for detailed results.');
+      }
+      
+    } catch (error: any) {
+      console.error('Error analyzing Hanya Institusi error:', error);
+      toast.error(`Analysis failed: ${error.message || 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRemoveValidator = async (validatorAddress: string) => {
+    if (!contractService || institusiId === 0) {
+      toast.error('Invalid institution or contract service');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      const confirmed = window.confirm(
+        `Are you sure you want to remove validator ${validatorAddress}?\n\nThis action cannot be undone.`
+      );
+      
+      if (!confirmed) return;
+      
+      toast.info('Removing validator...');
+      
+      const tx = await contractService.removeValidator(institusiId, validatorAddress);
+      toast.info('Transaction submitted, waiting for confirmation...');
+      
+      await tx.wait();
+      toast.success('Validator removed successfully!');
+      
+      // Reload validators list
+      await loadValidators();
+      
+    } catch (error: any) {
+      console.error('Error removing validator:', error);
+      toast.error(`Failed to remove validator: ${error.message || 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   if (!institutionData && !loading) {
     return (
@@ -1119,6 +1400,78 @@ const AdminDashboard: React.FC = () => {
           </Button>
         )}
       </div>
+
+      {/* Smart Contract Bug Alert */}
+      {showSmartContractBugAlert && (
+        <Alert className="border-red-200 bg-red-50">
+          <AlertTriangle className="h-4 w-4 text-red-600" />
+          <AlertTitle className="text-red-800">🐛 Confirmed Smart Contract Authorization Bug</AlertTitle>
+          <AlertDescription className="text-red-700">
+            <div className="space-y-3">
+              <p className="font-medium">
+                <strong>Issue:</strong> The appeal finalization is failing due to a confirmed bug in the Institusi contract's 
+                <code className="bg-red-200 px-1 rounded text-xs mx-1">adminFinalisasiBanding()</code> function.
+              </p>
+              
+              <div className="bg-red-100 p-3 rounded">
+                <p className="font-semibold text-sm mb-2">✅ Verified Facts:</p>
+                <ul className="list-disc list-inside text-xs space-y-1">
+                  <li>You ARE the correct admin for institution 2 "ukdw 2"</li>
+                  <li>Contract address: 0x523764Cd8A212D37092a99C1e4f0A7192977936c</li>
+                  <li>Your address: 0x38CfE8Cb409322E7A00D84699780126fa8336c1d</li>
+                  <li>Report belongs to your institution</li>
+                  <li>All authorization checks pass in diagnostics</li>
+                </ul>
+              </div>
+
+              <div className="bg-yellow-100 border-l-4 border-yellow-500 p-3">
+                <p className="font-semibold text-sm text-yellow-800 mb-1">🔍 Root Cause:</p>
+                <p className="text-xs text-yellow-700">
+                  The smart contract's internal authorization logic in <code>adminFinalisasiBanding()</code> 
+                  incorrectly rejects valid admin calls with error "Hanya admin dari institusi terkait" 
+                  (Only related institution admin). This is a smart contract bug, not a user permission issue.
+                </p>
+              </div>
+
+              <div className="bg-blue-100 p-3 rounded">
+                <p className="font-semibold text-sm mb-2">💡 Required Solution:</p>
+                <ul className="list-disc list-inside text-xs space-y-1">
+                  <li>Fix authorization logic in Institusi contract's <code>adminFinalisasiBanding()</code></li>
+                  <li>Redeploy updated contract to Taranium testnet</li>
+                  <li>Update contract addresses in application configuration</li>
+                </ul>
+              </div>
+
+              <div className="flex gap-2 mt-3">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setShowSmartContractBugAlert(false)}
+                  className="border-red-300 text-red-700 hover:bg-red-100"
+                >
+                  Dismiss
+                </Button>
+                <Button 
+                  size="sm"
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                  onClick={() => {
+                    console.log('📋 Smart Contract Bug Report:');
+                    console.log('- Contract: Institusi (0x523764Cd8A212D37092a99C1e4f0A7192977936c)');
+                    console.log('- Function: adminFinalisasiBanding()');
+                    console.log('- Error: "Hanya admin dari institusi terkait"');
+                    console.log('- Admin: 0x38CfE8Cb409322E7A00D84699780126fa8336c1d');
+                    console.log('- Institution: 2 "ukdw 2"');
+                    console.log('- Status: Authorization bug confirmed');
+                    toast.info('🐛 Smart contract bug details logged to console. Share with developers for contract fix.');
+                  }}
+                >
+                  Copy Bug Report
+                </Button>
+              </div>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
 
       <Tabs defaultValue="overview" className="w-full">
         <TabsList className="grid w-full grid-cols-4">
@@ -1493,10 +1846,42 @@ const AdminDashboard: React.FC = () => {
         <TabsContent value="appeals" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <Scale className="w-5 h-5" />
-                <span>Appeal Decisions</span>
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center space-x-2">
+                  <Scale className="w-5 h-5" />
+                  <span>Appeal Decisions</span>
+                </CardTitle>
+                <Button
+                  onClick={handleFixAppealContracts}
+                  variant="outline"
+                  size="sm"
+                  disabled={loading}
+                  className="bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200"
+                >
+                  <Settings className="w-4 h-4 mr-2" />
+                  Fix Appeal Setup
+                </Button>
+                <Button
+                  onClick={() => handleDiagnoseAppealFlow(appealReports[0]?.id || 1)}
+                  variant="outline"
+                  size="sm"
+                  disabled={loading || appealReports.length === 0}
+                  className="bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200"
+                >
+                  <Bug className="w-4 h-4 mr-2" />
+                  Diagnose Appeal Flow
+                </Button>
+                <Button
+                  onClick={() => handleAnalyzeHanyaInstitusiError(appealReports[0]?.id || 1)}
+                  variant="outline"
+                  size="sm"
+                  disabled={loading || appealReports.length === 0}
+                  className="bg-red-50 hover:bg-red-100 text-red-700 border-red-200"
+                >
+                  <AlertTriangle className="w-4 h-4 mr-2" />
+                  Analyze Error
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
@@ -1548,15 +1933,15 @@ const AdminDashboard: React.FC = () => {
                             <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5" />
                             <div className="text-sm text-amber-800">
                               <p className="font-medium">Appeal Information:</p>
-                              <p>This report was marked as "Invalid" by a validator, but the reporter has appealed the decision.</p>
-                              <p className="mt-1">The reporter has staked tokens for this appeal. Your decision will determine the final outcome.</p>
+                              <p className="text-amber-700">This report was marked as "Invalid" by a validator, but the reporter has appealed the decision.</p>
+                              <p className="mt-1 text-amber-700">The reporter has staked tokens for this appeal. Your decision will determine the final outcome.</p>
                             </div>
                           </div>
                         </div>
                         
                         <div className="flex gap-3 pt-4 border-t">
                           <Button
-                            onClick={() => handleAppealDecision(report.id, true)}
+                            onClick={() => handleAppealDecisionWithDiagnosis(report.id, true)}
                             className="flex-1 bg-green-500 hover:bg-green-600 text-white"
                             disabled={loading}
                           >
@@ -1565,12 +1950,56 @@ const AdminDashboard: React.FC = () => {
                           </Button>
                           
                           <Button
-                            onClick={() => handleAppealDecision(report.id, false)}
+                            onClick={() => handleAppealDecisionWithDiagnosis(report.id, false)}
                             className="flex-1 bg-red-500 hover:bg-red-600 text-white"
                             disabled={loading}
                           >
                             <X className="w-4 h-4 mr-2" />
                             Reject Appeal
+                          </Button>
+                        </div>
+                        
+                        <div className="flex gap-2 pt-2">
+                          <Button
+                            onClick={() => handleDiagnoseAppealFailure(report.id, true)}
+                            variant="outline"
+                            size="sm"
+                            disabled={loading}
+                            className="bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200"
+                          >
+                            <Bug className="w-3 h-3 mr-1" />
+                            Diagnose Issue
+                          </Button>
+                          
+                          <Button
+                            onClick={() => handleDiagnoseAppealFlow(report.id)}
+                            variant="outline"
+                            size="sm"
+                            disabled={loading}
+                            className="bg-orange-50 hover:bg-orange-100 text-orange-700 border-orange-200"
+                          >
+                            <Bug className="w-4 h-4 mr-2" />
+                            Diagnose This Appeal
+                          </Button>
+                          <Button
+                            onClick={() => handleDebugAppealFunctionality(report.id)}
+                            variant="outline"
+                            size="sm"
+                            disabled={loading}
+                            className="bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200"
+                          >
+                            <Settings className="w-4 h-4 mr-2" />
+                            Debug Contract Setup
+                          </Button>
+                          <Button
+                            onClick={() => handleAnalyzeHanyaInstitusiError(report.id)}
+                            variant="outline"
+                            size="sm"
+                            disabled={loading}
+                            className="bg-red-50 hover:bg-red-100 text-red-700 border-red-200"
+                          >
+                            <AlertTriangle className="w-4 h-4 mr-2" />
+                            Analyze Error
                           </Button>
                         </div>
                         

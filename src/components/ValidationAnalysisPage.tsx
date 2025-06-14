@@ -330,9 +330,9 @@ const ValidationAnalysisPage: React.FC = () => {
                       {!report.isValidated ? (
                         <div className="w-3 h-3 rounded-full bg-gray-300" title="Not validated" />
                       ) : report.validationResult?.isValid === true ? (
-                        <CheckCircle className="w-3 h-3 text-green-500" title="Valid" />
+                        <CheckCircle className="w-3 h-3 text-green-500" />
                       ) : report.validationResult?.isValid === false ? (
-                        <AlertTriangle className="w-3 h-3 text-amber-500" title="Invalid" />
+                        <AlertTriangle className="w-3 h-3 text-amber-500" />
                       ) : (
                         <div className="w-3 h-3 rounded-full bg-blue-300" title="Validated but result unknown" />
                       )}

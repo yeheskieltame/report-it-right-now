@@ -1,7 +1,9 @@
 
 import React from 'react';
 import { useWallet } from '../context/WalletContext';
+import { useLanguage } from '../context/LanguageContext';
 import WalletConnection from './WalletConnection';
+import LanguageSwitcher from './LanguageSwitcher';
 import { Button } from '@/components/ui/button';
 import { Home } from 'lucide-react';
 
@@ -11,6 +13,7 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { isConnected } = useWallet();
+  const { t } = useLanguage();
   
   const handleGoHome = () => {
     localStorage.removeItem('selectedInstitution');
@@ -28,7 +31,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <span className="text-white font-bold text-sm">DR</span>
               </div>
               <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                Decentralized Reporting
+                {t('app.title')}
               </h1>
             </div>
             
@@ -41,9 +44,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   className="flex items-center gap-2"
                 >
                   <Home className="w-4 h-4" />
-                  Home
+                  {t('nav.home')}
                 </Button>
               )}
+              <LanguageSwitcher />
               <WalletConnection />
             </div>
           </div>

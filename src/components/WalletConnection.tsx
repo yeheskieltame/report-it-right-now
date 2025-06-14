@@ -1,12 +1,24 @@
 
 import React from 'react';
 import { useWallet } from '../context/WalletContext';
+import { useLanguage } from '../context/LanguageContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
 const WalletConnection: React.FC = () => {
   const { address, isConnected, role, connectWallet, disconnectWallet } = useWallet();
+  const { t } = useLanguage();
+
+  const getRoleDisplayName = (role: string) => {
+    switch (role) {
+      case 'owner': return t('role.superAdmin');
+      case 'admin': return t('role.admin');
+      case 'validator': return t('role.validator');
+      case 'pelapor': return t('role.reporter');
+      default: return role.charAt(0).toUpperCase() + role.slice(1);
+    }
+  };
 
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
@@ -25,14 +37,12 @@ const WalletConnection: React.FC = () => {
   if (!isConnected) {
     return (
       <Card className="w-full max-w-md mx-auto bg-gradient-to-r from-blue-500 to-purple-600 text-white">
-        <CardContent className="p-6 text-center">
-          <h2 className="text-2xl font-bold mb-4">Connect Your Wallet</h2>
-          <p className="mb-6 opacity-90">Connect your wallet to access the Decentralized Reporting System</p>
+        <CardContent className="p-1 text-center">
           <Button 
             onClick={connectWallet}
             className="w-full bg-white text-blue-600 hover:bg-gray-100 font-semibold py-3"
           >
-            Connect Wallet
+            {t('wallet.connect')}
           </Button>
         </CardContent>
       </Card>
@@ -43,11 +53,11 @@ const WalletConnection: React.FC = () => {
     <div className="flex items-center space-x-4 bg-card border rounded-lg px-4 py-2">
       <div className="flex items-center space-x-2">
         <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-        <span className="text-sm font-medium">Connected</span>
+        <span className="text-sm font-medium">{t('wallet.connected')}</span>
       </div>
       
       <Badge className={`${getRoleBadgeColor(role)} text-white`}>
-        {role.charAt(0).toUpperCase() + role.slice(1)}
+        {getRoleDisplayName(role)}
       </Badge>
       
       <span className="text-sm text-muted-foreground font-mono">
@@ -60,7 +70,7 @@ const WalletConnection: React.FC = () => {
         size="sm"
         className="text-xs"
       >
-        Disconnect
+        {t('wallet.disconnect')}
       </Button>
     </div>
   );

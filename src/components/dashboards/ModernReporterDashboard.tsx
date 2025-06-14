@@ -145,8 +145,13 @@ const ModernReporterDashboard: React.FC = () => {
     
     for (const report of myReports) {
       try {
-        const info = await contractService.getBandingInfo(parseInt(report.id));
-        bandingInfoMap[report.id] = info;
+        // Check if report can be appealed (only invalid reports that aren't already in banding)
+        const canAppeal = report.status === 'Tidak Valid' && !report.isBanding;
+        bandingInfoMap[report.id] = {
+          canAppeal,
+          isBanding: report.isBanding,
+          reason: canAppeal ? 'This report can be appealed' : 'Appeal not available'
+        };
       } catch (error) {
         console.error(`Error loading banding info for report ${report.id}:`, error);
       }

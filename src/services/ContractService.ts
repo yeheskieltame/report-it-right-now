@@ -5,7 +5,8 @@ import {
   REWARD_MANAGER_ABI, 
   INSTITUSI_ABI, 
   USER_ABI, 
-  VALIDATOR_ABI 
+  VALIDATOR_ABI,
+  TOKENSALE_ABI
 } from '../config/contracts';
 
 export class ContractService {
@@ -275,6 +276,51 @@ export class ContractService {
     return await contract.burn(amountWei);
   }
 
+  // TokenSale Contract Methods
+  async getTokenPrice(): Promise<string> {
+    if (!CONTRACT_ADDRESSES.tokenSale) {
+      throw new Error('TokenSale contract address not set');
+    }
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.tokenSale, TOKENSALE_ABI, this.provider);
+    const price = await contract.tokenPrice();
+    return ethers.formatEther(price);
+  }
+
+  async buyTokensWithETH(ethAmount: string): Promise<ethers.ContractTransactionResponse> {
+    if (!CONTRACT_ADDRESSES.tokenSale) {
+      throw new Error('TokenSale contract address not set');
+    }
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.tokenSale, TOKENSALE_ABI, this.signer);
+    const signer = await this.signer.getAddress();
+    
+    return this.executeTransaction(
+      () => contract.buyTokens(signer, { value: ethers.parseEther(ethAmount) }),
+      'buyTokensWithETH'
+    );
+  }
+
+  async getTokenSaleRTKBalance(): Promise<string> {
+    if (!CONTRACT_ADDRESSES.tokenSale) {
+      throw new Error('TokenSale contract address not set');
+    }
+    const rtkContract = new ethers.Contract(CONTRACT_ADDRESSES.rtkToken, RTKT_TOKEN_ABI, this.provider);
+    const balance = await rtkContract.balanceOf(CONTRACT_ADDRESSES.tokenSale);
+    return ethers.formatEther(balance);
+  }
+
+  async calculateTokensForETH(ethAmount: string): Promise<string> {
+    if (!CONTRACT_ADDRESSES.tokenSale) {
+      throw new Error('TokenSale contract address not set');
+    }
+    const tokenPriceWei = await this.getTokenPrice();
+    const tokenPriceBigInt = ethers.parseEther(tokenPriceWei);
+    const ethAmountWei = ethers.parseEther(ethAmount);
+    
+    // Calculate: (ethAmount * 10^18) / tokenPrice
+    const tokensWei = (ethAmountWei * ethers.parseEther("1")) / tokenPriceBigInt;
+    return ethers.formatEther(tokensWei);
+  }
+
   // Reward Manager Methods
   async depositRTK(amount: string): Promise<ethers.ContractTransactionResponse> {
     const contract = new ethers.Contract(CONTRACT_ADDRESSES.rewardManager, REWARD_MANAGER_ABI, this.signer);
@@ -491,509 +537,81 @@ export class ContractService {
     return await contract.getLaporanDetails(laporanId);
   }
 
-  async finalisasiBanding(laporanId: number, userMenang: boolean): Promise<ethers.ContractTransactionResponse> {
-    console.log('=== FINALISASI BANDING USING NEW ADMIN FUNCTION ===');
-    console.log('LaporanId:', laporanId);
-    console.log('UserMenang:', userMenang);
-    
-    // Get signer address for permission check
-    const signerAddress = await this.signer.getAddress();
-    console.log('Signer address:', signerAddress);
-    
-    // Verify this is an appeal case
-    const isBandingCase = await this.isBanding(laporanId);
-    console.log('Is banding case:', isBandingCase);
-    if (!isBandingCase) {
-      throw new Error('Laporan ini bukan kasus banding');
-    }
-    
-    // Get report details to check institution ID
-    const laporan = await this.getLaporan(laporanId);
-    const institusiId = Number(laporan.institusiId);
-    console.log('Report institution ID:', institusiId);
-    
-    // Check if signer is admin of the institution
-    try {
-      const [, admin] = await this.getInstitusiData(institusiId);
-      console.log('Institution admin:', admin);
-      console.log('Is admin?', admin.toLowerCase() === signerAddress.toLowerCase());
-      
-      if (admin.toLowerCase() !== signerAddress.toLowerCase()) {
-        throw new Error(`Hanya admin institusi yang dapat memfinalisasi banding. Admin: ${admin}, Signer: ${signerAddress}`);
-      }
-    } catch (error) {
-      console.error('Error checking admin permissions:', error);
-      throw new Error(`Gagal memeriksa izin admin: ${error.message}`);
-    }
-    
-    // Verify report status
-    console.log('Report status:', laporan.status);
-    if (laporan.status !== 'Banding') {
-      throw new Error(`Status laporan tidak valid untuk finalisasi banding: ${laporan.status}. Laporan harus berstatus 'Banding' untuk dapat difinalisasi.`);
-    }
-    
-    console.log('All validations passed, calling adminFinalisasiBanding...');
-    
-    // Use the new adminFinalisasiBanding function from Institusi contract
-    const institusiContract = new ethers.Contract(CONTRACT_ADDRESSES.institusi, INSTITUSI_ABI, this.signer);
-    
-    return this.executeTransaction(
-      () => institusiContract.adminFinalisasiBanding(laporanId, userMenang),
-      'adminFinalisasiBanding'
-    );
-  }
-
   async isBanding(laporanId: number): Promise<boolean> {
     const contract = new ethers.Contract(CONTRACT_ADDRESSES.user, USER_ABI, this.provider);
     return await contract.isBanding(laporanId);
   }
 
-  async getStakeBandingAmount(): Promise<string> {
-    const contract = new ethers.Contract(CONTRACT_ADDRESSES.user, USER_ABI, this.provider);
-    const amount = await contract.STAKE_BANDING_AMOUNT();
-    return ethers.formatEther(amount);
-  }
-
-  async getActiveAssignmentsCount(validator: string): Promise<number> {
-    const contract = new ethers.Contract(CONTRACT_ADDRESSES.user, USER_ABI, this.provider);
-    const count = await contract.activeAssignmentsCount(validator);
-    return Number(count);
-  }
-
-  // Validator Contract Methods
-  async validasiLaporan(laporanId: number, isValid: boolean, deskripsi: string): Promise<ethers.ContractTransactionResponse> {
-    const contract = new ethers.Contract(CONTRACT_ADDRESSES.validator, VALIDATOR_ABI, this.signer);
-    
-    return this.executeTransaction(
-      () => contract.validasiLaporan(laporanId, isValid, deskripsi),
-      'validasiLaporan'
-    );
-  }
-
-  async resignFromInstitusi(institusiId: number): Promise<ethers.ContractTransactionResponse> {
-    const contract = new ethers.Contract(CONTRACT_ADDRESSES.validator, VALIDATOR_ABI, this.signer);
-    return await contract.resignFromInstitusi(institusiId);
-  }
-
   async getHasilValidasi(laporanId: number) {
-    try {
-      console.log(`=== Fetching validation result for report ${laporanId} ===`);
-      const contract = new ethers.Contract(CONTRACT_ADDRESSES.validator, VALIDATOR_ABI, this.provider);
-      
-      // First verify the report is validated
-      const isValidated = await contract.laporanSudahDivalidasi(laporanId);
-      console.log(`Report ${laporanId} validation status:`, isValidated);
-      
-      if (!isValidated) {
-        throw new Error(`Report ${laporanId} has not been validated yet`);
-      }
-      
-      // Try calling hasilValidasi directly with better error handling
-      try {
-        console.log(`Calling hasilValidasi(${laporanId}) on contract ${CONTRACT_ADDRESSES.validator}`);
-        const result = await contract.hasilValidasi(laporanId);
-        console.log(`Raw result from hasilValidasi:`, result);
-        console.log(`Result constructor:`, result.constructor.name);
-        console.log(`Result keys:`, Object.keys(result));
-        
-        // Parse the result - try multiple approaches
-        console.log(`Raw hasilValidasi result for report ${laporanId}:`, result);
-        
-        // First try direct extraction from the result object
-        try {
-          let isValid, deskripsi, validator, timestamp;
-          
-          // Handle ethers.js Result object directly
-          if (result && (Array.isArray(result) || result.length !== undefined)) {
-            // Extract values one by one with error handling
-            try {
-              isValid = Boolean(result[0]);
-              console.log('Extracted isValid:', isValid);
-            } catch (e) { isValid = true; console.warn('Failed to extract isValid:', e); }
-            
-            try {
-              deskripsi = String(result[1] || '');
-              console.log('Extracted deskripsi:', deskripsi);
-            } catch (e) { deskripsi = ''; console.warn('Failed to extract deskripsi:', e); }
-            
-            try {
-              validator = String(result[2] || '0x0000000000000000000000000000000000000000');
-              console.log('Extracted validator:', validator);
-            } catch (e) { validator = '0x0000000000000000000000000000000000000000'; console.warn('Failed to extract validator:', e); }
-            
-            try {
-              timestamp = Number(result[3] || 0);
-              console.log('Extracted timestamp:', timestamp);
-            } catch (e) { timestamp = Math.floor(Date.now() / 1000); console.warn('Failed to extract timestamp:', e); }
-            
-            // Validate that we got meaningful data
-            if (deskripsi && deskripsi.length > 0 && deskripsi !== 'undefined' && 
-                validator && validator.length === 42 && validator.startsWith('0x') &&
-                validator !== '0x0000000000000000000000000000000000000000') {
-              
-              const validData = {
-                isValid,
-                deskripsi: deskripsi.trim(),
-                validator: validator.toLowerCase(),
-                timestamp: timestamp > 0 ? timestamp : Math.floor(Date.now() / 1000)
-              };
-              
-              console.log(`Successfully extracted validation data for report ${laporanId}:`, validData);
-              return validData;
-            } else {
-              console.warn('Direct extraction did not yield valid data, trying fallback parsing');
-            }
-          }
-        } catch (directError) {
-          console.warn('Direct extraction failed:', directError);
-        }
-        
-        // Fallback to the original parsing method
-        const parsedData = this.parseValidationResult(result, laporanId);
-        if (parsedData) {
-          console.log(`Successfully parsed validation data via fallback for report ${laporanId}:`, parsedData);
-          return parsedData;
-        } else {
-          console.warn(`parseValidationResult returned null (likely ABI overflow), trying raw call approach`);
-          throw new Error('ABI overflow detected, falling back to raw call');
-        }
-        
-      } catch (contractError) {
-        console.error(`Contract call failed for report ${laporanId}:`, contractError);
-        
-        // If the contract call fails, try a lower-level approach
-        try {
-          console.log(`Attempting lower-level contract call for report ${laporanId}`);
-          const callData = contract.interface.encodeFunctionData('hasilValidasi', [laporanId]);
-          console.log(`Encoded call data:`, callData);
-          
-          const rawResult = await this.provider.call({
-            to: CONTRACT_ADDRESSES.validator,
-            data: callData
-          });
-          
-          console.log(`Raw call result:`, rawResult);
-          
-          if (rawResult && rawResult !== '0x') {
-            // First try normal ABI decoding
-            try {
-              const decoded = contract.interface.decodeFunctionResult('hasilValidasi', rawResult);
-              console.log(`Decoded result:`, decoded);
-              
-              const parsedData = this.parseValidationResult(decoded, laporanId);
-              if (parsedData) {
-                console.log(`Successfully parsed validation data via ABI decoding for report ${laporanId}:`, parsedData);
-                return parsedData;
-              }
-            } catch (abiError) {
-              console.warn(`ABI decoding failed, attempting manual hex decoding:`, abiError);
-              console.log(`Raw hex data for manual parsing:`, rawResult);
-              
-              // Try our enhanced manual hex parsing directly on the raw hex
-              const manuallyDecoded = this.parseValidationDataFromHex(rawResult);
-              if (manuallyDecoded) {
-                console.log(`Successfully parsed validation data via enhanced manual hex decoding for report ${laporanId}:`, manuallyDecoded);
-                return manuallyDecoded;
-              }
-              
-              // If enhanced parsing fails, try the legacy method
-              const legacyDecoded = this.decodeValidationDataFromHex(rawResult, laporanId);
-              if (legacyDecoded) {
-                console.log(`Successfully parsed validation data via legacy hex decoding for report ${laporanId}:`, legacyDecoded);
-                return legacyDecoded;
-              }
-              
-              console.warn(`Both manual parsing methods failed for report ${laporanId}`);
-            }
-          }
-          
-          throw new Error('Raw call also failed to return valid data');
-          
-        } catch (rawError) {
-          console.error(`Raw contract call also failed for report ${laporanId}:`, rawError);
-          
-          // Return fallback data with clear indication of the issue
-          console.warn(`Returning fallback validation data for report ${laporanId}`);
-          return {
-            isValid: true, // We know it's validated from laporanSudahDivalidasi check
-            deskripsi: `Laporan ${laporanId} telah divalidasi (detail tidak dapat diambil dari kontrak)`,
-            validator: '0x0000000000000000000000000000000000000000',
-            timestamp: Math.floor(Date.now() / 1000)
-          };
-        }
-      }
-      
-    } catch (error) {
-      console.error(`Error in getHasilValidasi for report ${laporanId}:`, error);
-      
-      // Re-throw validation status errors
-      if (error.message && error.message.includes('has not been validated')) {
-        throw error;
-      }
-      
-      // For other errors, provide more context
-      const errorMessage = error.reason || error.message || 'Unknown error';
-      throw new Error(`Failed to get validation result for report ${laporanId}: ${errorMessage}`);
-    }
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.validator, VALIDATOR_ABI, this.provider);
+    return await contract.hasilValidasi(laporanId);
   }
 
-  // Enhanced method untuk mendapatkan validation result dengan better error handling
-  async getEnhancedValidationResult(laporanId: number): Promise<any> {
-    try {
-      console.log(`=== Enhanced Validation Fetch for Report ${laporanId} ===`);
-      
-      // Step 1: Verify report is validated
-      const isValidated = await this.isLaporanSudahDivalidasi(laporanId);
-      if (!isValidated) {
-        throw new Error(`Report ${laporanId} has not been validated yet`);
-      }
-
-      // Step 2: Try multiple methods to get validation data
-      const contract = new ethers.Contract(CONTRACT_ADDRESSES.validator, VALIDATOR_ABI, this.provider);
-      
-      // Method 1: Direct contract call
-      try {
-        console.log('Method 1: Direct contract call...');
-        const result = await contract.hasilValidasi(laporanId);
-        console.log('Direct call result:', result);
-        
-        const parsed = this.parseValidationResult(result, laporanId);
-        if (parsed) {
-          console.log('Successfully parsed via direct call');
-          return { ...parsed, fetchMethod: 'DIRECT_CALL', hasError: false };
-        }
-      } catch (directError) {
-        console.warn('Direct call failed:', directError.message);
-      }
-
-      // Method 2: Raw call with IMMEDIATE hex parsing (prioritize success)
-      try {
-        console.log('Method 2: Raw call with immediate hex parsing...');
-        const callData = contract.interface.encodeFunctionData('hasilValidasi', [laporanId]);
-        const rawResult = await this.provider.call({
-          to: CONTRACT_ADDRESSES.validator,
-          data: callData
-        });
-
-        console.log('Raw hex result:', rawResult);
-
-        if (rawResult && rawResult !== '0x' && rawResult.length > 10) {
-          // IMMEDIATELY try to extract data from hex without complex parsing
-          const simpleExtracted = this.extractValidationFromRawHex(rawResult, laporanId);
-          if (simpleExtracted) {
-            console.log('✅ SUCCESS: Simple hex extraction worked!', simpleExtracted);
-            return { ...simpleExtracted, fetchMethod: 'SIMPLE_HEX_EXTRACTION', hasError: false };
-          }
-
-          // Try enhanced hex parsing as backup
-          const enhancedParsed = this.parseValidationDataFromHex(rawResult);
-          if (enhancedParsed) {
-            console.log('✅ SUCCESS: Enhanced hex parsing worked!', enhancedParsed);
-            return { ...enhancedParsed, fetchMethod: 'ENHANCED_HEX_PARSING', hasError: false };
-          }
-
-          // Try legacy hex parsing as final backup
-          const legacyParsed = this.decodeValidationDataFromHex(rawResult, laporanId);
-          if (legacyParsed) {
-            console.log('✅ SUCCESS: Legacy hex parsing worked!', legacyParsed);
-            return { ...legacyParsed, fetchMethod: 'LEGACY_HEX_PARSING', hasError: false };
-          }
-        }
-      } catch (rawError) {
-        console.warn('Raw call failed:', rawError.message);
-      }
-
-      // Method 3: Return fallback data with error info
-      console.warn(`All parsing methods failed for report ${laporanId}, returning fallback`);
-      return {
-        isValid: true, // We know it's validated
-        deskripsi: `Laporan ${laporanId} telah divalidasi - Data tidak dapat diambil dari kontrak karena masalah encoding`,
-        validator: '0x0000000000000000000000000000000000000000',
-        timestamp: 0,
-        fetchMethod: 'FALLBACK',
-        hasError: true,
-        errorType: 'ALL_METHODS_FAILED'
-      };
-
-    } catch (error) {
-      console.error(`Enhanced validation fetch failed for report ${laporanId}:`, error);
-      throw error;
-    }
-  }
-
-  // Method untuk bulk fetch validation results dengan progress tracking
-  async getBulkValidationResults(reportIds: number[], onProgress?: (current: number, total: number) => void): Promise<Map<number, any>> {
-    const results = new Map<number, any>();
-    
-    for (let i = 0; i < reportIds.length; i++) {
-      const reportId = reportIds[i];
-      
-      try {
-        const result = await this.getEnhancedValidationResult(reportId);
-        results.set(reportId, result);
-      } catch (error) {
-        console.error(`Failed to get validation for report ${reportId}:`, error);
-        results.set(reportId, {
-          isValid: false,
-          deskripsi: `Error: ${error.message}`,
-          validator: '0x0000000000000000000000000000000000000000',
-          timestamp: 0,
-          fetchMethod: 'ERROR',
-          hasError: true,
-          errorType: 'FETCH_FAILED'
-        });
-      }
-
-      if (onProgress) {
-        onProgress(i + 1, reportIds.length);
-      }
-    }
-
-    return results;
-  }
-
-  // Helper method to parse validation result from different sources
-  private parseValidationResult(result: any, laporanId: number): any | null {
-    try {
-      console.log(`Parsing validation result for report ${laporanId}:`, result);
-      console.log(`Result type:`, typeof result, `Is array:`, Array.isArray(result));
-      
-      let isValid, deskripsi, validator, timestamp;
-      
-      // Handle ethers.js Result objects that might have deferred ABI decoding issues
-      if (result && (Array.isArray(result) || result.length !== undefined)) {
-        console.log(`Attempting to extract data from Result object...`);
-        
-        // Use a more defensive approach - try to extract each value individually
-        // and catch ABI overflow errors early
-        try {
-          // Extract all values in one go to detect ABI overflow issues
-          const testValues = [result[0], result[1], result[2], result[3]];
-          console.log(`All values extracted successfully:`, testValues);
-          
-          isValid = result[0];
-          deskripsi = result[1];
-          validator = result[2];
-          timestamp = result[3];
-          
-          console.log(`Extracted values - isValid: ${isValid}, deskripsi: "${deskripsi}", validator: ${validator}, timestamp: ${timestamp}`);
-          
-        } catch (abiError) {
-          console.warn(`ABI overflow detected when accessing Result indices:`, abiError);
-          // This is the key issue - when ethers.js Result has ABI overflow, we can't extract the values
-          // Return null to trigger fallback to manual hex parsing
-          return null;
-        }
-        
-      } else {
-        // Handle as pure object structure
-        isValid = result.isValid;
-        deskripsi = result.deskripsi;
-        validator = result.validator;
-        timestamp = result.timestamp;
-        
-        console.log(`Parsed as object - isValid: ${isValid}, deskripsi: "${deskripsi}", validator: ${validator}, timestamp: ${timestamp}`);
-      }
-      
-      // Clean and validate deskripsi
-      let cleanDeskripsi;
-      try {
-        if (deskripsi === null || deskripsi === undefined) {
-          throw new Error('Deskripsi is null/undefined due to ABI overflow');
-        }
-        
-        if (typeof deskripsi === 'string' && deskripsi.trim().length > 0) {
-          cleanDeskripsi = deskripsi.trim();
-        } else if (deskripsi && typeof deskripsi.toString === 'function') {
-          const descStr = deskripsi.toString();
-          if (descStr.startsWith('0x')) {
-            // Handle hex-encoded strings
-            try {
-              cleanDeskripsi = ethers.toUtf8String(descStr);
-            } catch {
-              throw new Error('Hex decoding failed');
-            }
-          } else {
-            cleanDeskripsi = descStr;
-          }
-        } else {
-          throw new Error('Invalid deskripsi format');
-        }
-        
-        // Check for empty or corrupted descriptions
-        if (!cleanDeskripsi || cleanDeskripsi.trim().length === 0 || cleanDeskripsi.includes('\x00')) {
-          throw new Error('Empty or corrupted description');
-        }
-        
-        console.log(`Successfully cleaned deskripsi: "${cleanDeskripsi}"`);
-      } catch (descError) {
-        console.warn(`Failed to parse deskripsi for report ${laporanId}:`, descError);
-        // Return null to trigger fallback parsing
-        return null;
-      }
-      
-      // Clean and validate validator address
-      let cleanValidator;
-      try {
-        if (validator && typeof validator === 'string' && validator.startsWith('0x') && validator.length === 42) {
-          cleanValidator = validator.toLowerCase();
-        } else if (validator && typeof validator.toString === 'function') {
-          const validatorStr = validator.toString();
-          if (validatorStr.startsWith('0x') && validatorStr.length === 42) {
-            cleanValidator = validatorStr.toLowerCase();
-          } else {
-            throw new Error('Invalid validator address format');
-          }
-        } else {
-          throw new Error('No valid validator address');
-        }
-        
-        // Check for null/empty addresses or the corrupted address we've been seeing
-        if (cleanValidator === '0x0000000000000000000000000000000000000000' || 
-            cleanValidator === '0x0000000000000000000000000000000000000060') {
-          throw new Error('Null or corrupted validator address');
-        }
-        
-        console.log(`Successfully cleaned validator: ${cleanValidator}`);
-      } catch (validatorError) {
-        console.warn(`Failed to parse validator for report ${laporanId}:`, validatorError);
-        cleanValidator = '0x0000000000000000000000000000000000000000';
-      }
-      
-      // Clean and validate timestamp
-      let cleanTimestamp;
-      try {
-        const timestampNum = Number(timestamp);
-        if (timestampNum > 1000000000 && timestampNum < 9999999999) {
-          cleanTimestamp = timestampNum;
-        } else {
-          throw new Error('Invalid timestamp range');
-        }
-        console.log(`Successfully cleaned timestamp: ${cleanTimestamp}`);
-      } catch (timestampError) {
-        console.warn(`Failed to parse timestamp for report ${laporanId}:`, timestampError);
-        cleanTimestamp = Math.floor(Date.now() / 1000);
-      }
-      
-      const cleanData = {
-        isValid: Boolean(isValid),
-        deskripsi: cleanDeskripsi,
-        validator: cleanValidator,
-        timestamp: cleanTimestamp
-      };
-      
-      console.log(`Final cleaned validation data for report ${laporanId}:`, cleanData);
-      return cleanData;
-      
-    } catch (parseError) {
-      console.error(`Failed to parse validation result for report ${laporanId}:`, parseError);
-      return null;
-    }
-  }
-
+  // Wrapper method for laporanSudahDivalidasi to maintain compatibility with existing code
   async isLaporanSudahDivalidasi(laporanId: number): Promise<boolean> {
     const contract = new ethers.Contract(CONTRACT_ADDRESSES.validator, VALIDATOR_ABI, this.provider);
     return await contract.laporanSudahDivalidasi(laporanId);
+  }
+
+  // Enhanced validation result method for better error handling
+  async getEnhancedValidationResult(laporanId: number): Promise<any> {
+    try {
+      const validationResult = await this.getHasilValidasi(laporanId);
+      return {
+        ...validationResult,
+        fetchMethod: 'enhanced',
+        hasError: false
+      };
+    } catch (error) {
+      console.warn(`Enhanced validation result failed for report ${laporanId}:`, error);
+      return {
+        validator: '0x0000000000000000000000000000000000000000',
+        isValid: false,
+        deskripsi: `Error fetching validation data: ${error.message}`,
+        timestamp: 0,
+        hasError: true,
+        errorType: 'FETCH_ERROR',
+        fetchMethod: 'enhanced_fallback'
+      };
+    }
+  }
+
+  // Debug method for validation data issues
+  async debugValidationDataIssues(laporanId: number): Promise<void> {
+    console.log(`=== DEBUGGING VALIDATION DATA ISSUES FOR REPORT ${laporanId} ===`);
+    
+    try {
+      // Try multiple methods to get validation data
+      console.log('1. Attempting getHasilValidasi...');
+      try {
+        const validationResult = await this.getHasilValidasi(laporanId);
+        console.log('✅ getHasilValidasi result:', validationResult);
+      } catch (error) {
+        console.log('❌ getHasilValidasi failed:', error.message);
+      }
+
+      console.log('2. Checking validation status...');
+      try {
+        const isValidated = await this.isLaporanSudahDivalidasi(laporanId);
+        console.log('✅ isLaporanSudahDivalidasi result:', isValidated);
+      } catch (error) {
+        console.log('❌ isLaporanSudahDivalidasi failed:', error.message);
+      }
+
+      console.log('3. Getting report details...');
+      try {
+        const reportData = await this.getLaporan(laporanId);
+        console.log('✅ Report data:', reportData);
+      } catch (error) {
+        console.log('❌ getLaporan failed:', error.message);
+      }
+
+      console.log('4. Running comprehensive debug...');
+      console.log('✅ Debug validation data issues completed successfully');
+
+    } catch (error) {
+      console.error('❌ Debug validation data issues failed:', error);
+    }
   }
 
   // Helper Methods
@@ -1002,298 +620,48 @@ export class ContractService {
     return await contract.setContracts(institusiContract, userContract);
   }
 
-  // Enhanced initialization method that includes User contract setup
-  async initializeContracts(): Promise<void> {
-    try {
-      // Set validator contract in institusi contract
-      console.log('Setting validator contract...');
-      const setValidatorTx = await this.setValidatorContract(CONTRACT_ADDRESSES.validator);
-      await setValidatorTx.wait();
-      
-      // Set user contract in institusi contract  
-      console.log('Setting user contract...');
-      const setUserTx = await this.setUserContract(CONTRACT_ADDRESSES.user);
-      await setUserTx.wait();
-      
-      // Set contracts in reward manager
-      console.log('Setting reward manager contracts...');
-      const setRewardTx = await this.setRewardManagerContracts(CONTRACT_ADDRESSES.institusi, CONTRACT_ADDRESSES.user);
-      await setRewardTx.wait();
-      
-      // Initialize User contract with all required addresses
-      console.log('Initializing User contract...');
-      await this.initializeUserContract();
-      
-      console.log('All contracts initialized successfully');
-    } catch (error) {
-      console.error('Error initializing contracts:', error);
-      throw error;
-    }
-  }
-
-  // Debug method to compare validation checks
-  async debugValidationStatus(laporanId: number): Promise<{
-    isValidated: boolean;
-    hasValidationResult: boolean;
-    validationData?: any;
-    contractAddresses: any;
-    reportData?: any;
-    adminCheck?: any;
-  }> {
-    console.log(`=== Debugging validation status for report ${laporanId} ===`);
+  // Debug method for validation status - returns validation info suitable for contribution setting
+  async debugValidationStatus(laporanId: number): Promise<any> {
+    console.log(`=== DEBUG VALIDATION STATUS FOR REPORT ${laporanId} ===`);
     
-    const result = {
-      isValidated: false,
-      hasValidationResult: false,
-      validationData: null,
-      contractAddresses: CONTRACT_ADDRESSES,
-      reportData: null,
-      adminCheck: null
-    };
-    
-    // Check using isLaporanSudahDivalidasi
     try {
-      const contract = new ethers.Contract(CONTRACT_ADDRESSES.validator, VALIDATOR_ABI, this.provider);
-      result.isValidated = await contract.laporanSudahDivalidasi(laporanId);
-      console.log(`laporanSudahDivalidasi result: ${result.isValidated}`);
-    } catch (error) {
-      console.error('Error checking laporanSudahDivalidasi:', error);
-    }
-    
-    // Check if validation result exists
-    try {
-      const validationResult = await this.getHasilValidasi(laporanId);
-      result.hasValidationResult = true;
-      result.validationData = validationResult;
-      console.log('Validation result exists:', validationResult);
-    } catch (error) {
-      console.error('Error getting validation result:', error);
-      result.hasValidationResult = false;
-    }
-    
-    // Check the report itself
-    try {
-      const report = await this.getLaporan(laporanId);
-      result.reportData = report;
-      console.log('Report data:', report);
-    } catch (error) {
-      console.error('Error getting report:', error);
-    }
-    
-    // Check admin permissions
-    try {
-      const signerAddress = await this.signer.getAddress();
-      if (result.reportData) {
-        const institusiId = Number(result.reportData.institusiId);
-        const [, admin] = await this.getInstitusiData(institusiId);
-        result.adminCheck = {
-          signerAddress,
-          institusiId,
-          institutionAdmin: admin,
-          isAdmin: admin.toLowerCase() === signerAddress.toLowerCase()
-        };
-        console.log('Admin check:', result.adminCheck);
-      }
-    } catch (error) {
-      console.error('Error checking admin permissions:', error);
-    }
-    
-    console.log('=== Debug result ===', result);
-    return result;
-  }
-
-  // Helper method to manually decode hex data when ABI decoding fails
-  private decodeValidationDataFromHex(rawHex: string, laporanId: number): any | null {
-    try {
-      console.log(`Attempting manual hex decoding for report ${laporanId}:`, rawHex);
+      // Check if report is validated
+      const isValidated = await this.isLaporanSudahDivalidasi(laporanId);
       
-      if (!rawHex || rawHex === '0x' || rawHex.length < 10) {
-        console.warn('Invalid hex data for manual decoding');
-        return null;
-      }
+      let validationResult = null;
+      let hasValidationResult = false;
       
-      // Remove 0x prefix and decode
-      const hex = rawHex.slice(2);
-      
-      // Try to extract boolean (first 32 bytes)
-      const isValidHex = hex.slice(0, 64);
-      const isValid = parseInt(isValidHex, 16) === 1;
-      
-      // Try to extract string offset (second 32 bytes)
-      const stringOffsetHex = hex.slice(64, 128);
-      const stringOffset = parseInt(stringOffsetHex, 16) * 2; // Convert to hex position
-      
-      // Try to extract address (third 32 bytes)
-      const addressHex = hex.slice(128, 192);
-      const validator = '0x' + addressHex.slice(-40); // Last 20 bytes
-      
-      // Try to extract timestamp (fourth 32 bytes)
-      const timestampHex = hex.slice(192, 256);
-      const timestamp = parseInt(timestampHex, 16);
-      
-      // Try to extract string data
-      let deskripsi = `Validation result for report ${laporanId}`;
-      if (stringOffset < hex.length) {
+      if (isValidated) {
         try {
-          const stringLengthHex = hex.slice(stringOffset, stringOffset + 64);
-          const stringLength = parseInt(stringLengthHex, 16) * 2;
-          const stringDataHex = hex.slice(stringOffset + 64, stringOffset + 64 + stringLength);
-          
-          // Convert hex to string
-          const stringData = Buffer.from(stringDataHex, 'hex').toString('utf8');
-          if (stringData && stringData.length > 0) {
-            deskripsi = stringData;
-          }
-        } catch (stringError) {
-          console.warn('Failed to decode string data:', stringError);
+          validationResult = await this.getHasilValidasi(laporanId);
+          hasValidationResult = true;
+          console.log('✅ Validation result found:', validationResult);
+        } catch (error) {
+          console.log('⚠️ Report is validated but validation result not accessible:', error.message);
         }
       }
       
-      console.log('Manual hex decoding result:', { isValid, deskripsi, validator, timestamp });
-      
-      return {
-        isValid,
-        deskripsi,
-        validator,
-        timestamp
+      const debugInfo = {
+        laporanId,
+        isValidated,
+        hasValidationResult,
+        validationResult,
+        canSetContribution: isValidated && hasValidationResult
       };
       
+      console.log('Debug validation status result:', debugInfo);
+      return debugInfo;
+      
     } catch (error) {
-      console.error('Manual hex decoding failed:', error);
-      return null;
-    }
-  }
-
-  // Enhanced manual hex parsing method specifically for validation data extraction
-  private parseValidationDataFromHex(rawHex: string): any | null {
-    try {
-      if (!rawHex || rawHex === '0x' || rawHex.length < 10) {
-        return null;
-      }
-      
-      const hex = rawHex.slice(2);
-      
-      // ABI encoding format: bool (32 bytes) + string offset (32 bytes) + address (32 bytes) + uint64 (32 bytes) + string data
-      
-      // Extract boolean (isValid)
-      const isValid = parseInt(hex.slice(0, 64), 16) === 1;
-      
-      // Extract validator address
-      const addressHex = hex.slice(128, 192);
-      const validator = '0x' + addressHex.slice(-40);
-      
-      // Extract timestamp
-      const timestampHex = hex.slice(192, 256);
-      const timestamp = parseInt(timestampHex, 16);
-      
-      // Extract string data
-      let deskripsi = 'Validation completed';
-      try {
-        const stringOffsetHex = hex.slice(64, 128);
-        const stringOffset = parseInt(stringOffsetHex, 16) * 2;
-        
-        if (stringOffset < hex.length) {
-          const stringLengthHex = hex.slice(stringOffset, stringOffset + 64);
-          const stringLength = parseInt(stringLengthHex, 16) * 2;
-          
-          if (stringLength > 0 && stringOffset + 64 + stringLength <= hex.length) {
-            const stringDataHex = hex.slice(stringOffset + 64, stringOffset + 64 + stringLength);
-            const decoded = Buffer.from(stringDataHex, 'hex').toString('utf8').replace(/\0/g, '');
-            if (decoded && decoded.length > 0) {
-              deskripsi = decoded;
-            }
-          }
-        }
-      } catch (stringError) {
-        console.warn('Failed to decode string from hex:', stringError);
-      }
-      
+      console.error('Error in debugValidationStatus:', error);
       return {
-        isValid,
-        deskripsi,
-        validator,
-        timestamp
+        laporanId,
+        isValidated: false,
+        hasValidationResult: false,
+        validationResult: null,
+        canSetContribution: false,
+        error: error.message
       };
-      
-    } catch (error) {
-      console.error('Enhanced hex parsing failed:', error);
-      return null;
-    }
-  }
-
-  // Simple and direct hex extraction method that prioritizes success
-  private extractValidationFromRawHex(rawHex: string, laporanId: number): any | null {
-    try {
-      if (!rawHex || rawHex === '0x' || rawHex.length < 256) {
-        return null;
-      }
-      
-      const hex = rawHex.slice(2);
-      
-      // Extract the most reliable parts
-      const isValid = parseInt(hex.slice(0, 64), 16) === 1;
-      const validator = '0x' + hex.slice(128, 192).slice(-40);
-      const timestamp = parseInt(hex.slice(192, 256), 16);
-      
-      return {
-        isValid,
-        deskripsi: `Report ${laporanId} validated - ${isValid ? 'Valid' : 'Invalid'}`,
-        validator,
-        timestamp
-      };
-      
-    } catch (error) {
-      console.error('Simple hex extraction failed:', error);
-      return null;
-    }
-  }
-
-  // Comprehensive debugging method to analyze validation data issues
-  async debugValidationDataIssues(laporanId: number): Promise<void> {
-    try {
-      console.log(`=== DEBUGGING VALIDATION DATA ISSUES FOR REPORT ${laporanId} ===`);
-      
-      const contract = new ethers.Contract(CONTRACT_ADDRESSES.validator, VALIDATOR_ABI, this.provider);
-      
-      // Try different approaches to get data
-      console.log('1. Testing direct function call...');
-      try {
-        const directResult = await contract.hasilValidasi(laporanId);
-        console.log('Direct result:', directResult);
-      } catch (directError) {
-        console.log('Direct call failed:', directError.message);
-      }
-      
-      console.log('2. Testing raw call...');
-      try {
-        const callData = contract.interface.encodeFunctionData('hasilValidasi', [laporanId]);
-        const rawResult = await this.provider.call({
-          to: CONTRACT_ADDRESSES.validator,
-          data: callData
-        });
-        console.log('Raw result:', rawResult);
-        console.log('Raw result length:', rawResult.length);
-        
-        if (rawResult && rawResult !== '0x') {
-          console.log('3. Testing manual decoding methods...');
-          
-          const method1 = this.decodeValidationDataFromHex(rawResult, laporanId);
-          console.log('Method 1 (legacy):', method1);
-          
-          const method2 = this.parseValidationDataFromHex(rawResult);
-          console.log('Method 2 (enhanced):', method2);
-          
-          const method3 = this.extractValidationFromRawHex(rawResult, laporanId);
-          console.log('Method 3 (simple):', method3);
-        }
-      } catch (rawError) {
-        console.log('Raw call failed:', rawError.message);
-      }
-      
-      console.log(`=== END DEBUG FOR REPORT ${laporanId} ===`);
-      
-    } catch (error) {
-      console.error(`Debug validation data issues failed for report ${laporanId}:`, error);
     }
   }
 
@@ -1345,40 +713,1137 @@ export class ContractService {
     }
   }
 
-  async getBandingInfo(laporanId: number): Promise<{
-    isBanding: boolean;
-    canAppeal: boolean;
-    reason: string;
-  }> {
+  // Comprehensive debug method for appeal functionality
+  async debugAppealFunctionality(laporanId: number): Promise<any> {
+    console.log('=== COMPREHENSIVE APPEAL DEBUG ===');
+    
     try {
-      const laporan = await this.getLaporan(laporanId);
-      const isBanding = await this.isBanding(laporanId);
+      const debugInfo: any = {
+        laporanId,
+        userContractCheck: {},
+        institusiContractCheck: {},
+        rewardManagerCheck: {},
+        overallStatus: 'unknown'
+      };
       
-      let canAppeal = false;
-      let reason = '';
-      
-      if (isBanding) {
-        reason = 'Laporan sedang dalam proses banding';
-      } else if (laporan.status === 'Valid') {
-        reason = 'Laporan valid tidak dapat dibanding';
-      } else if (laporan.status === 'Menunggu') {
-        reason = 'Laporan belum divalidasi';
-      } else if (laporan.status === 'Tidak Valid') {
-        canAppeal = true;
-        reason = 'Laporan dapat dibanding';
+      // 1. Check User Contract setup
+      console.log('1. Checking User Contract...');
+      try {
+        const userContract = new ethers.Contract(CONTRACT_ADDRESSES.user, USER_ABI, this.provider);
+        const institusiAddr = await userContract.institusiContract();
+        const rewardManagerAddr = await userContract.rewardManager();
+        
+        debugInfo.userContractCheck = {
+          address: CONTRACT_ADDRESSES.user,
+          institusiContractSet: institusiAddr,
+          rewardManagerSet: rewardManagerAddr,
+          isInstitusiCorrect: institusiAddr.toLowerCase() === CONTRACT_ADDRESSES.institusi.toLowerCase(),
+          isRewardManagerCorrect: rewardManagerAddr.toLowerCase() === CONTRACT_ADDRESSES.rewardManager.toLowerCase()
+        };
+      } catch (error) {
+        debugInfo.userContractCheck.error = error.message;
       }
       
-      return {
-        isBanding,
-        canAppeal,
-        reason
-      };
+      // 2. Check Institusi Contract setup
+      console.log('2. Checking Institusi Contract...');
+      try {
+        const institusiContract = new ethers.Contract(CONTRACT_ADDRESSES.institusi, INSTITUSI_ABI, this.provider);
+        const userContractAddr = await institusiContract.userContract();
+        const rewardManagerAddr = await institusiContract.rewardManager();
+        
+        debugInfo.institusiContractCheck = {
+          address: CONTRACT_ADDRESSES.institusi,
+          userContractSet: userContractAddr,
+          rewardManagerSet: rewardManagerAddr,
+          isUserCorrect: userContractAddr.toLowerCase() === CONTRACT_ADDRESSES.user.toLowerCase(),
+          isRewardManagerCorrect: rewardManagerAddr.toLowerCase() === CONTRACT_ADDRESSES.rewardManager.toLowerCase()
+        };
+      } catch (error) {
+        debugInfo.institusiContractCheck.error = error.message;
+      }
+      
+      // 3. Check RewardManager Contract setup
+      console.log('3. Checking RewardManager Contract...');
+      try {
+        const rewardManagerContract = new ethers.Contract(CONTRACT_ADDRESSES.rewardManager, REWARD_MANAGER_ABI, this.provider);
+        
+        // Try to get contract addresses if available
+        let institusiContractInRM = '0x0000000000000000000000000000000000000000';
+        let userContractInRM = '0x0000000000000000000000000000000000000000';
+        
+        try {
+          institusiContractInRM = await rewardManagerContract.institusiContract?.() || '0x0000000000000000000000000000000000000000';
+        } catch (e) { /* getter might not exist */ }
+        
+        try {
+          userContractInRM = await rewardManagerContract.userContract?.() || '0x0000000000000000000000000000000000000000';
+        } catch (e) { /* getter might not exist */ }
+        
+        debugInfo.rewardManagerCheck = {
+          address: CONTRACT_ADDRESSES.rewardManager,
+          institusiContractSet: institusiContractInRM,
+          userContractSet: userContractInRM,
+          isInstitusiCorrect: institusiContractInRM.toLowerCase() === CONTRACT_ADDRESSES.institusi.toLowerCase(),
+          isUserCorrect: userContractInRM.toLowerCase() === CONTRACT_ADDRESSES.user.toLowerCase()
+        };
+      } catch (error) {
+        debugInfo.rewardManagerCheck.error = error.message;
+      }
+      
+      // 4. Check report details
+      console.log('4. Checking Report Details...');
+      try {
+        const laporan = await this.getLaporan(laporanId);
+        const isBanding = await this.isBanding(laporanId);
+        
+        debugInfo.reportDetails = {
+          laporanId: laporan.laporanId,
+          institusiId: laporan.institusiId,
+          status: laporan.status,
+          isBanding: isBanding,
+          pelapor: laporan.pelapor
+        };
+      } catch (error) {
+        debugInfo.reportDetails = { error: error.message };
+      }
+      
+      // 5. Overall status assessment
+      const userOk = debugInfo.userContractCheck.isInstitusiCorrect && debugInfo.userContractCheck.isRewardManagerCorrect;
+      const institusiOk = debugInfo.institusiContractCheck.isUserCorrect && debugInfo.institusiContractCheck.isRewardManagerCorrect;
+      const rewardManagerOk = debugInfo.rewardManagerCheck.isInstitusiCorrect && debugInfo.rewardManagerCheck.isUserCorrect;
+      
+      if (userOk && institusiOk && rewardManagerOk) {
+        debugInfo.overallStatus = 'all_contracts_properly_configured';
+      } else {
+        debugInfo.overallStatus = 'contract_configuration_issues';
+        debugInfo.issues = {
+          userContract: !userOk,
+          institusiContract: !institusiOk,
+          rewardManager: !rewardManagerOk
+        };
+      }
+      
+      console.log('=== COMPREHENSIVE DEBUG RESULT ===', debugInfo);
+      return debugInfo;
+      
     } catch (error) {
-      return {
-        isBanding: false,
-        canAppeal: false,
-        reason: `Error: ${error.message}`
+      console.error('Error in comprehensive appeal debug:', error);
+      return { error: error.message };
+    }
+  }
+
+  // Comprehensive diagnosis method for the "Hanya Institusi Contract" error
+  async diagnoseAppealFlow(laporanId: number): Promise<any> {
+    console.log('=== COMPREHENSIVE APPEAL FLOW DIAGNOSIS ===');
+    
+    try {
+      const diagnosis: any = {
+        step1_adminCheck: {},
+        step2_contractSetup: {},
+        step3_flowAnalysis: {},
+        recommendations: []
       };
+      
+      // Step 1: Check admin permissions
+      console.log('Step 1: Checking admin permissions...');
+      const signerAddress = await this.signer.getAddress();
+      const laporan = await this.getLaporan(laporanId);
+      const institusiId = Number(laporan.institusiId);
+      const [, admin] = await this.getInstitusiData(institusiId);
+      
+      diagnosis.step1_adminCheck = {
+        signerAddress,
+        institusiId,
+        institutionAdmin: admin,
+        isAdmin: admin.toLowerCase() === signerAddress.toLowerCase(),
+        reportStatus: laporan.status,
+        reportData: laporan
+      };
+      
+      // Step 2: Contract setup analysis
+      console.log('Step 2: Analyzing contract setup...');
+      const userContract = new ethers.Contract(CONTRACT_ADDRESSES.user, USER_ABI, this.provider);
+      const institusiContract = new ethers.Contract(CONTRACT_ADDRESSES.institusi, INSTITUSI_ABI, this.provider);
+      
+      // Check User contract setup
+      try {
+        const userInstitusiAddr = await userContract.institusiContract();
+        const userRewardManagerAddr = await userContract.rewardManager();
+        
+        diagnosis.step2_contractSetup.userContract = {
+          address: CONTRACT_ADDRESSES.user,
+          institusiContractSet: userInstitusiAddr,
+          rewardManagerSet: userRewardManagerAddr,
+          isInstitusiCorrect: userInstitusiAddr.toLowerCase() === CONTRACT_ADDRESSES.institusi.toLowerCase(),
+          isRewardManagerCorrect: userRewardManagerAddr.toLowerCase() === CONTRACT_ADDRESSES.rewardManager.toLowerCase()
+        };
+      } catch (error) {
+        diagnosis.step2_contractSetup.userContract = { error: error.message };
+      }
+      
+      // Check Institusi contract setup
+      try {
+        const institusiUserAddr = await institusiContract.userContract();
+        const institusiRewardManagerAddr = await institusiContract.rewardManager();
+        
+        diagnosis.step2_contractSetup.institusiContract = {
+          address: CONTRACT_ADDRESSES.institusi,
+          userContractSet: institusiUserAddr,
+          rewardManagerSet: institusiRewardManagerAddr,
+          isUserCorrect: institusiUserAddr.toLowerCase() === CONTRACT_ADDRESSES.user.toLowerCase(),
+          isRewardManagerCorrect: institusiRewardManagerAddr.toLowerCase() === CONTRACT_ADDRESSES.rewardManager.toLowerCase()
+        };
+      } catch (error) {
+        diagnosis.step2_contractSetup.institusiContract = { error: error.message };
+      }
+      
+      // Step 3: Flow analysis
+      console.log('Step 3: Analyzing expected appeal flow...');
+      diagnosis.step3_flowAnalysis = {
+        expectedFlow: [
+          '1. Admin calls adminFinalisasiBanding() on Institusi contract',
+          '2. Institusi contract calls finalisasiBanding() on User contract',
+          '3. User contract updates report status and handles stake',
+          '4. If stake return needed, User contract should either:',
+          '   a) Handle stake internally, OR',
+          '   b) Call RewardManager through Institusi contract'
+        ],
+        currentIssue: 'User contract is calling RewardManager directly',
+        possibleCause: 'User contract is calling RewardManager functions that expect calls from Institusi contract only'
+      };
+      
+      // Recommendations
+      if (diagnosis.step2_contractSetup.userContract?.isInstitusiCorrect && 
+          diagnosis.step2_contractSetup.institusiContract?.isUserCorrect) {
+        diagnosis.recommendations.push('✅ Contract references are correct');
+        diagnosis.recommendations.push('💡 Issue is likely in the appeal stake handling logic');
+        diagnosis.recommendations.push('🔧 Solution: User contract should not call RewardManager directly');
+        diagnosis.recommendations.push('🔧 Solution: Appeal stake should be handled by Institusi contract or within User contract');
+      } else {
+        diagnosis.recommendations.push('❌ Contract references need to be fixed first');
+        diagnosis.recommendations.push('🔧 Run fixUserContractForAppeals() to fix setup');
+      }
+      
+      console.log('=== DIAGNOSIS RESULT ===', diagnosis);
+      return diagnosis;
+      
+    } catch (error) {
+      console.error('Error in appeal flow diagnosis:', error);
+      return { error: error.message };
+    }
+  }
+
+  // Method to analyze and provide solutions for "Hanya Institusi Contract" error
+  async analyzeHanyaInstitusiError(laporanId: number): Promise<any> {
+    console.log('=== ANALYZING "HANYA INSTITUSI CONTRACT" ERROR ===');
+    
+    try {
+      const analysis: any = {
+        errorType: 'Hanya Institusi Contract',
+        problemSource: 'unknown',
+        possibleCauses: [],
+        recommendedSolutions: [],
+        contractFlow: [],
+        diagnostics: {}
+      };
+      
+      // Analyze the expected flow
+      analysis.contractFlow = [
+        '1. Admin calls adminFinalisasiBanding() on Institusi contract ✅',
+        '2. Institusi contract calls finalisasiBanding() on User contract ✅',
+        '3. User contract processes appeal and updates status ✅',
+        '4. User contract tries to call RewardManager for stake handling ❌ ERROR HERE',
+        '5. RewardManager rejects because caller is User contract, not Institusi contract'
+      ];
+      
+      // Identify possible causes
+      analysis.possibleCauses = [
+        'RewardManager is configured to only accept calls from Institusi contract',
+        'User contract is calling RewardManager.returnAppealStake() directly',
+        'Appeal stake handling logic is incorrect in User contract',
+        'RewardManager access control is too restrictive for appeal flow'
+      ];
+      
+      // Check current contract setup
+      console.log('Checking current contract configurations...');
+      
+      try {
+        const userContract = new ethers.Contract(CONTRACT_ADDRESSES.user, USER_ABI, this.provider);
+        const institusiContract = new ethers.Contract(CONTRACT_ADDRESSES.institusi, INSTITUSI_ABI, this.provider);
+        
+        // Check User contract setup
+        const userInstitusiAddr = await userContract.institusiContract();
+        const userRewardManagerAddr = await userContract.rewardManager();
+        
+        // Check Institusi contract setup
+        const institusiUserAddr = await institusiContract.userContract();
+        const institusiRewardManagerAddr = await institusiContract.rewardManager();
+        
+        analysis.diagnostics = {
+          userContract: {
+            address: CONTRACT_ADDRESSES.user,
+            institusiContractSet: userInstitusiAddr,
+            rewardManagerSet: userRewardManagerAddr,
+            pointsToCorrectInstitusi: userInstitusiAddr.toLowerCase() === CONTRACT_ADDRESSES.institusi.toLowerCase(),
+            pointsToCorrectRewardManager: userRewardManagerAddr.toLowerCase() === CONTRACT_ADDRESSES.rewardManager.toLowerCase()
+          },
+          institusiContract: {
+            address: CONTRACT_ADDRESSES.institusi,
+            userContractSet: institusiUserAddr,
+            rewardManagerSet: institusiRewardManagerAddr,
+            pointsToCorrectUser: institusiUserAddr.toLowerCase() === CONTRACT_ADDRESSES.user.toLowerCase(),
+            pointsToCorrectRewardManager: institusiRewardManagerAddr.toLowerCase() === CONTRACT_ADDRESSES.rewardManager.toLowerCase()
+          }
+        };
+        
+        // Determine the problem source based on diagnostics
+        if (analysis.diagnostics.userContract.pointsToCorrectInstitusi && 
+            analysis.diagnostics.userContract.pointsToCorrectRewardManager) {
+          analysis.problemSource = 'RewardManager access control';
+          analysis.recommendedSolutions = [
+            '🔧 SOLUTION 1: Modify RewardManager to accept User contract calls for appeal functions',
+            '🔧 SOLUTION 2: Change User contract to call RewardManager through Institusi contract',
+            '🔧 SOLUTION 3: Handle appeal stakes entirely within User contract without calling RewardManager',
+            '🔧 SOLUTION 4: Add a proxy function in Institusi contract for RewardManager calls'
+          ];
+        } else {
+          analysis.problemSource = 'Contract setup issues';
+          analysis.recommendedSolutions = [
+            '🔧 Fix contract references first using fixUserContractForAppeals()',
+            '🔧 Ensure all contracts point to correct addresses',
+            '🔧 Re-run contract initialization'
+          ];
+        }
+        
+      } catch (setupError) {
+        analysis.diagnostics.error = setupError.message;
+        analysis.problemSource = 'Contract setup error';
+      }
+      
+      // Report information
+      try {
+        const laporan = await this.getLaporan(laporanId);
+        analysis.reportInfo = {
+          id: laporanId,
+          status: laporan.status,
+          institusiId: Number(laporan.institusiId),
+          pelapor: laporan.pelapor
+        };
+      } catch (reportError) {
+        analysis.reportInfo = { error: reportError.message };
+      }
+      
+      console.log('=== ANALYSIS COMPLETE ===', analysis);
+      return analysis;
+      
+    } catch (error) {
+      console.error('Error in Hanya Institusi Contract analysis:', error);
+      return { error: error.message };
+    }
+  }
+
+  async diagnoseAppealFinalizationFailure(laporanId: number, userMenang: boolean): Promise<any> {
+    console.log('🔍 COMPREHENSIVE APPEAL FINALIZATION DIAGNOSIS');
+    console.log('═'.repeat(60));
+    
+    const diagnosis: any = {
+      step1_basicChecks: {},
+      step2_contractStates: {},
+      step3_permissionChecks: {},
+      step4_functionValidation: {},
+      step5_recommendations: []
+    };
+    
+    try {
+      const signerAddress = await this.signer.getAddress();
+      console.log(`📋 Diagnosing appeal finalization for Report ${laporanId}`);
+      console.log(`👤 Signer: ${signerAddress}`);
+      console.log(`🎯 User Wins: ${userMenang}`);
+      
+      // STEP 1: Basic Checks
+      console.log('\n🔍 STEP 1: Basic Validation Checks');
+      console.log('─'.repeat(40));
+      
+      try {
+        const laporan = await this.getLaporan(laporanId);
+        const isBanding = await this.isBanding(laporanId);
+        
+        diagnosis.step1_basicChecks = {
+          reportExists: true,
+          reportData: {
+            id: laporan.laporanId,
+            institusiId: Number(laporan.institusiId),
+            status: laporan.status,
+            pelapor: laporan.pelapor
+          },
+          isBanding: isBanding,
+          statusValid: laporan.status === 'Banding',
+          bandingStatusMatches: isBanding === (laporan.status === 'Banding')
+        };
+        
+        console.log(`✅ Report exists: ID ${laporan.laporanId}`);
+        console.log(`📊 Status: ${laporan.status}`);
+        console.log(`🏛️ Institution: ${laporan.institusiId}`);
+        console.log(`👤 Reporter: ${laporan.pelapor}`);
+        console.log(`⚖️ Is Banding: ${isBanding}`);
+        console.log(`✅ Status check: ${diagnosis.step1_basicChecks.statusValid ? 'PASS' : 'FAIL'}`);
+        
+      } catch (error) {
+        console.log(`❌ Basic checks failed: ${error.message}`);
+        diagnosis.step1_basicChecks.error = error.message;
+        return diagnosis;
+      }
+      
+      // STEP 2: Contract State Analysis
+      console.log('\n🔍 STEP 2: Contract State Analysis');
+      console.log('─'.repeat(40));
+      
+      try {
+        const userContract = new ethers.Contract(CONTRACT_ADDRESSES.user, USER_ABI, this.provider);
+        const institusiContract = new ethers.Contract(CONTRACT_ADDRESSES.institusi, INSTITUSI_ABI, this.provider);
+        const rewardManagerContract = new ethers.Contract(CONTRACT_ADDRESSES.rewardManager, REWARD_MANAGER_ABI, this.provider);
+        
+        // Check User contract setup
+        const userInstitusiAddr = await userContract.institusiContract();
+        const userRewardManagerAddr = await userContract.rewardManager();
+        
+        // Check Institusi contract setup
+        const institusiUserAddr = await institusiContract.userContract();
+        const institusiRewardManagerAddr = await institusiContract.rewardManager();
+        
+        // Check RewardManager setup
+        let rmInstitusiAddr = '0x0000000000000000000000000000000000000000';
+        let rmUserAddr = '0x0000000000000000000000000000000000000000';
+        
+        try {
+          rmInstitusiAddr = await rewardManagerContract.institusiContract();
+          rmUserAddr = await rewardManagerContract.userContract();
+        } catch (rmError) {
+          console.log('⚠️ RewardManager getters not available or accessible');
+        }
+        
+        diagnosis.step2_contractStates = {
+          userContract: {
+            address: CONTRACT_ADDRESSES.user,
+            institusiSet: userInstitusiAddr,
+            rewardManagerSet: userRewardManagerAddr,
+            institusiCorrect: userInstitusiAddr.toLowerCase() === CONTRACT_ADDRESSES.institusi.toLowerCase(),
+            rewardManagerCorrect: userRewardManagerAddr.toLowerCase() === CONTRACT_ADDRESSES.rewardManager.toLowerCase()
+          },
+          institusiContract: {
+            address: CONTRACT_ADDRESSES.institusi,
+            userSet: institusiUserAddr,
+            rewardManagerSet: institusiRewardManagerAddr,
+            userCorrect: institusiUserAddr.toLowerCase() === CONTRACT_ADDRESSES.user.toLowerCase(),
+            rewardManagerCorrect: institusiRewardManagerAddr.toLowerCase() === CONTRACT_ADDRESSES.rewardManager.toLowerCase()
+          },
+          rewardManager: {
+            address: CONTRACT_ADDRESSES.rewardManager,
+            institusiSet: rmInstitusiAddr,
+            userSet: rmUserAddr,
+            institusiCorrect: rmInstitusiAddr.toLowerCase() === CONTRACT_ADDRESSES.institusi.toLowerCase(),
+            userCorrect: rmUserAddr.toLowerCase() === CONTRACT_ADDRESSES.user.toLowerCase()
+          }
+        };
+        
+        console.log('📊 User Contract State:');
+        console.log(`  Institusi ref: ${userInstitusiAddr} ${diagnosis.step2_contractStates.userContract.institusiCorrect ? '✅' : '❌'}`);
+        console.log(`  RewardMgr ref: ${userRewardManagerAddr} ${diagnosis.step2_contractStates.userContract.rewardManagerCorrect ? '✅' : '❌'}`);
+        
+        console.log('📊 Institusi Contract State:');
+        console.log(`  User ref: ${institusiUserAddr} ${diagnosis.step2_contractStates.institusiContract.userCorrect ? '✅' : '❌'}`);
+        console.log(`  RewardMgr ref: ${institusiRewardManagerAddr} ${diagnosis.step2_contractStates.institusiContract.rewardManagerCorrect ? '✅' : '❌'}`);
+        
+        console.log('📊 RewardManager State:');
+        console.log(`  Institusi ref: ${rmInstitusiAddr} ${diagnosis.step2_contractStates.rewardManager.institusiCorrect ? '✅' : '❌'}`);
+        console.log(`  User ref: ${rmUserAddr} ${diagnosis.step2_contractStates.rewardManager.userCorrect ? '✅' : '❌'}`);
+        
+      } catch (error) {
+        console.log(`❌ Contract state analysis failed: ${error.message}`);
+        diagnosis.step2_contractStates.error = error.message;
+      }
+      
+      // STEP 3: Permission Checks
+      console.log('\n🔍 STEP 3: Permission Validation');
+      console.log('─'.repeat(40));
+      
+      try {
+        const institusiId = diagnosis.step1_basicChecks.reportData.institusiId;
+        const [institutionName, admin, treasury] = await this.getInstitusiData(institusiId);
+        
+        diagnosis.step3_permissionChecks = {
+          institusiId,
+          institutionName,
+          admin,
+          treasury,
+          signerAddress,
+          isAdmin: admin.toLowerCase() === signerAddress.toLowerCase()
+        };
+        
+        console.log(`🏛️ Institution: ${institutionName} (ID: ${institusiId})`);
+        console.log(`👨‍💼 Admin: ${admin}`);
+        console.log(`💰 Treasury: ${treasury}`);
+        console.log(`👤 Signer: ${signerAddress}`);
+        console.log(`🔐 Is Admin: ${diagnosis.step3_permissionChecks.isAdmin ? '✅ YES' : '❌ NO'}`);
+        
+        if (!diagnosis.step3_permissionChecks.isAdmin) {
+          diagnosis.step5_recommendations.push('❌ CRITICAL: Signer is not institution admin');
+          diagnosis.step5_recommendations.push(`💡 Solution: Use admin wallet ${admin}`);
+        }
+        
+      } catch (error) {
+        console.log(`❌ Permission checks failed: ${error.message}`);
+        diagnosis.step3_permissionChecks.error = error.message;
+      }
+      
+      // STEP 4: Function Validation
+      console.log('\n🔍 STEP 4: Function Call Validation');
+      console.log('─'.repeat(40));
+      
+      try {
+        const institusiContract = new ethers.Contract(CONTRACT_ADDRESSES.institusi, INSTITUSI_ABI, this.signer);
+        
+        // Check if function exists in ABI
+        const hasFunction = institusiContract.interface.hasFunction('adminFinalisasiBanding');
+        console.log(`📞 Function exists: ${hasFunction ? '✅ YES' : '❌ NO'}`);
+        
+        if (hasFunction) {
+          // Try to estimate gas for the function call
+          try {
+            const gasEstimate = await institusiContract.adminFinalisasiBanding.estimateGas(laporanId, userMenang);
+            console.log(`⛽ Gas estimate: ${gasEstimate.toString()} ✅`);
+            
+            diagnosis.step4_functionValidation = {
+              functionExists: true,
+              gasEstimateSuccessful: true,
+              estimatedGas: gasEstimate.toString()
+            };
+          } catch (gasError) {
+            console.log(`⛽ Gas estimation failed: ${gasError.message} ❌`);
+            console.log('🔍 This indicates the transaction would revert');
+            
+            diagnosis.step4_functionValidation = {
+              functionExists: true,
+              gasEstimateSuccessful: false,
+              gasError: gasError.message
+            };
+            
+            // Try to get more specific error using staticCall
+            try {
+              console.log('🔍 Attempting static call to get revert reason...');
+              await institusiContract.adminFinalisasiBanding.staticCall(laporanId, userMenang);
+            } catch (staticError) {
+              console.log(`🔍 Static call error: ${staticError.message}`);
+              diagnosis.step4_functionValidation.staticCallError = staticError.message;
+              
+              // Parse common error patterns
+              if (staticError.message.includes('Hanya admin')) {
+                diagnosis.step5_recommendations.push('❌ ERROR: Not authorized as admin');
+              } else if (staticError.message.includes('Tidak Valid')) {
+                diagnosis.step5_recommendations.push('❌ ERROR: Report status not valid for appeal finalization');
+              } else if (staticError.message.includes('Hanya Institusi Contract')) {
+                diagnosis.step5_recommendations.push('❌ ERROR: RewardManager access control issue detected');
+                diagnosis.step5_recommendations.push('💡 Solution: RewardManager needs to accept calls from User contract');
+              }
+            }
+          }
+        } else {
+          diagnosis.step4_functionValidation = {
+            functionExists: false
+          };
+          diagnosis.step5_recommendations.push('❌ CRITICAL: adminFinalisasiBanding function not found in contract ABI');
+        }
+        
+      } catch (error) {
+        console.log(`❌ Function validation failed: ${error.message}`);
+        diagnosis.step4_functionValidation.error = error.message;
+      }
+      
+      // STEP 5: Generate Recommendations
+      console.log('\n💡 STEP 5: Recommendations');
+      console.log('─'.repeat(40));
+      
+      if (diagnosis.step5_recommendations.length === 0) {
+        diagnosis.step5_recommendations.push('🤔 No obvious issues detected - may be a gas or timing issue');
+        diagnosis.step5_recommendations.push('💡 Try increasing gas limit or retrying transaction');
+      }
+      
+      diagnosis.step5_recommendations.forEach(rec => console.log(rec));
+      
+      return diagnosis;
+      
+    } catch (error) {
+      console.error('❌ Diagnosis failed:', error);
+      diagnosis.error = error.message;
+      return diagnosis;
+    }
+  }
+
+  // === PRE-FLIGHT CHECK FOR APPEAL FINALIZATION ===
+  
+  async preFlightCheckAppealFinalization(laporanId: number, userMenang: boolean): Promise<{
+    canProceed: boolean;
+    issues: string[];
+    reportData: any;
+  }> {
+    const issues: string[] = [];
+    
+    try {
+      console.log('=== PRE-FLIGHT CHECK APPEAL FINALIZATION ===');
+      console.log(`Report ID: ${laporanId}, User Wins: ${userMenang}`);
+      
+      // 1. Check signer authorization
+      const signerAddress = await this.signer.getAddress();
+      console.log(`✅ Signer address: ${signerAddress}`);
+      
+      // 2. Get report data
+      const userContract = new ethers.Contract(CONTRACT_ADDRESSES.user, USER_ABI, this.provider);
+      const reportData = await userContract.laporan(laporanId);
+      const institusiId = reportData.institusiId;
+      
+      console.log(`✅ Report data retrieved: ID=${reportData.laporanId}, Status=${reportData.status}, InstitusiID=${institusiId}`);
+      
+      // 3. Check if admin of institution
+      const institusiContract = new ethers.Contract(CONTRACT_ADDRESSES.institusi, INSTITUSI_ABI, this.provider);
+      const [nama, admin, treasury] = await institusiContract.getInstitusiData(institusiId);
+      
+      if (signerAddress.toLowerCase() !== admin.toLowerCase()) {
+        issues.push(`❌ AUTHORIZATION: Signer ${signerAddress} is not admin ${admin} of institution ${institusiId}`);
+      } else {
+        console.log(`✅ Admin authorization confirmed for institution "${nama}"`);
+      }
+      
+      // 4. Check if report is in banding status
+      const isBandingStatus = await userContract.isBanding(laporanId);
+      if (!isBandingStatus) {
+        issues.push(`❌ APPEAL STATUS: Report ${laporanId} is not in banding status (isBanding: ${isBandingStatus})`);
+      } else {
+        console.log(`✅ Report is in appeal status`);
+      }
+      
+      // 5. Check report status matches
+      if (reportData.status !== 'Banding') {
+        issues.push(`❌ STATUS MISMATCH: Report status is "${reportData.status}" but should be "Banding"`);
+      } else {
+        console.log(`✅ Report status is "Banding"`);
+      }
+      
+      // 6. Check contracts are properly connected
+      const institusiContractAddr = await userContract.institusiContractAddress();
+      if (institusiContractAddr.toLowerCase() !== CONTRACT_ADDRESSES.institusi.toLowerCase()) {
+        issues.push(`❌ CONTRACT SETUP: User contract institusi address mismatch: ${institusiContractAddr} vs ${CONTRACT_ADDRESSES.institusi}`);
+      } else {
+        console.log(`✅ User contract properly connected to Institusi contract`);
+      }
+      
+      // 7. Check RewardManager has enough tokens for operations
+      const rtkContract = new ethers.Contract(CONTRACT_ADDRESSES.rtkToken, RTKT_TOKEN_ABI, this.provider);
+      const rewardManagerBalance = await rtkContract.balanceOf(CONTRACT_ADDRESSES.rewardManager);
+      const stakeAmount = await userContract.STAKE_BANDING_AMOUNT();
+      
+      if (rewardManagerBalance < stakeAmount) {
+        issues.push(`❌ INSUFFICIENT BALANCE: RewardManager balance ${ethers.formatEther(rewardManagerBalance)} RTK < required ${ethers.formatEther(stakeAmount)} RTK`);
+      } else {
+        console.log(`✅ RewardManager has sufficient balance: ${ethers.formatEther(rewardManagerBalance)} RTK`);
+      }
+      
+      // 8. Check if validator exists for the report (for slashing operation)
+      if (userMenang && reportData.validatorAddress === ethers.ZeroAddress) {
+        issues.push(`⚠️ WARNING: User wins but no validator address to slash (validatorAddress: ${reportData.validatorAddress})`);
+      } else if (userMenang) {
+        console.log(`✅ Validator address available for slashing: ${reportData.validatorAddress}`);
+      }
+      
+      // 9. Test gas estimation (dry run)
+      try {
+        const gasEstimate = await institusiContract.adminFinalisasiBanding.estimateGas(laporanId, userMenang);
+        console.log(`✅ Gas estimation successful: ${gasEstimate.toString()}`);
+      } catch (gasError: any) {
+        issues.push(`❌ GAS ESTIMATION FAILED: ${gasError.message || gasError.reason || 'Unknown gas estimation error'}`);
+      }
+      
+      // 10. Test static call (simulation)
+      try {
+        await institusiContract.adminFinalisasiBanding.staticCall(laporanId, userMenang);
+        console.log(`✅ Static call simulation successful`);
+      } catch (staticError: any) {
+        issues.push(`❌ STATIC CALL FAILED: ${staticError.message || staticError.reason || 'Transaction would revert'}`);
+      }
+      
+      const finalResult = {
+        canProceed: issues.length === 0,
+        issues,
+        reportData: {
+          laporanId: reportData.laporanId.toString(),
+          institusiId: reportData.institusiId.toString(),
+          pelapor: reportData.pelapor,
+          status: reportData.status,
+          validatorAddress: reportData.validatorAddress,
+          isBanding: isBandingStatus,
+          admin,
+          treasury,
+          signerAddress,
+          institutionName: nama,
+          stakeAmount: ethers.formatEther(stakeAmount),
+          rewardManagerBalance: ethers.formatEther(rewardManagerBalance)
+        }
+      };
+      
+      console.log('=== PRE-FLIGHT CHECK RESULTS ===');
+      console.log(`Can proceed: ${finalResult.canProceed}`);
+      if (finalResult.issues.length > 0) {
+        console.log('Issues found:');
+        finalResult.issues.forEach(issue => console.log(issue));
+      }
+      
+      return finalResult;
+      
+    } catch (error: any) {
+      issues.push(`❌ PRE-FLIGHT CHECK FAILED: ${error.message}`);
+      return { 
+        canProceed: false, 
+        issues, 
+        reportData: null 
+      };
+    }
+  }
+
+  // === SMART CONTRACT BUG WORKAROUND ===
+  
+  /**
+   * Alternative appeal finalization that attempts to work around smart contract bugs
+   * This method provides detailed debugging and alternative approaches
+   */
+  async finalisasiBandingWithWorkaround(laporanId: number, userMenang: boolean): Promise<{
+    success: boolean;
+    txHash?: string;
+    error?: string;
+    diagnostics: any;
+  }> {
+    console.log('🔧 APPEAL FINALIZATION WITH WORKAROUND');
+    console.log(`Report ID: ${laporanId}, User Wins: ${userMenang}`);
+    
+    const diagnostics: any = {
+      timestamp: new Date().toISOString(),
+      reportId: laporanId,
+      userWins: userMenang,
+      steps: []
+    };
+    
+    try {
+      // Step 1: Get current signer and report details
+      const signerAddress = await this.signer.getAddress();
+      const userContract = new ethers.Contract(CONTRACT_ADDRESSES.user, USER_ABI, this.provider);
+      const institusiContract = new ethers.Contract(CONTRACT_ADDRESSES.institusi, INSTITUSI_ABI, this.provider);
+      
+      diagnostics.signer = signerAddress;
+      diagnostics.steps.push('✅ Contracts initialized');
+      
+      // Step 2: Get report data
+      const reportData = await userContract.laporan(laporanId);
+      const institusiId = reportData.institusiId;
+      
+      diagnostics.reportData = {
+        id: reportData.laporanId.toString(),
+        institusiId: reportData.institusiId.toString(),
+        status: reportData.status,
+        pelapor: reportData.pelapor
+      };
+      diagnostics.steps.push('✅ Report data retrieved');
+      
+      // Step 3: Get institution admin data
+      const [nama, admin, treasury] = await institusiContract.getInstitusiData(institusiId);
+      
+      diagnostics.institutionData = {
+        id: institusiId.toString(),
+        name: nama,
+        admin,
+        treasury,
+        isCurrentUserAdmin: admin.toLowerCase() === signerAddress.toLowerCase()
+      };
+      diagnostics.steps.push('✅ Institution data retrieved');
+      
+      // Step 4: Check if we are the admin
+      if (admin.toLowerCase() !== signerAddress.toLowerCase()) {
+        const error = `Authorization failed: Current user ${signerAddress} is not admin ${admin} of institution ${nama}`;
+        diagnostics.steps.push(`❌ ${error}`);
+        return {
+          success: false,
+          error,
+          diagnostics
+        };
+      }
+      
+      diagnostics.steps.push('✅ Authorization confirmed');
+      
+      // Step 5: Try different approaches based on the smart contract bug
+      
+      // Approach 1: Try the standard way first
+      console.log('🔄 Approach 1: Standard adminFinalisasiBanding...');
+      try {
+        const institusiContractWithSigner = new ethers.Contract(CONTRACT_ADDRESSES.institusi, INSTITUSI_ABI, this.signer);
+        
+        // Test with static call first
+        await institusiContractWithSigner.adminFinalisasiBanding.staticCall(laporanId, userMenang);
+        
+        // If static call succeeds, send actual transaction
+        const tx = await institusiContractWithSigner.adminFinalisasiBanding(laporanId, userMenang);
+        diagnostics.steps.push('✅ Standard approach succeeded');
+        
+        return {
+          success: true,
+          txHash: tx.hash,
+          diagnostics
+        };
+        
+      } catch (standardError: any) {
+        console.log('❌ Standard approach failed:', standardError.reason || standardError.message);
+        diagnostics.steps.push(`❌ Standard approach failed: ${standardError.reason || standardError.message}`);
+        
+        // If standard approach fails due to admin check, there might be a smart contract bug
+        if (standardError.reason === 'Hanya admin dari institusi terkait') {
+          
+          // Approach 2: Check if there's a contract deployment issue
+          console.log('🔄 Approach 2: Checking contract deployment...');
+          
+          // Verify that the contract we're calling has the right admin data
+          try {
+            const onChainInstitusiId = reportData.institusiId;
+            const [onChainNama, onChainAdmin] = await institusiContract.getInstitusiData(onChainInstitusiId);
+            
+            if (onChainAdmin.toLowerCase() !== signerAddress.toLowerCase()) {
+              const error = `Contract data mismatch: On-chain admin ${onChainAdmin} != current user ${signerAddress}`;
+              diagnostics.steps.push(`❌ ${error}`);
+              return {
+                success: false,
+                error,
+                diagnostics
+              };
+            }
+            
+            // Approach 3: Try calling with explicit gas limit
+            console.log('🔄 Approach 3: Explicit gas limit...');
+            try {
+              const institusiContractWithSigner = new ethers.Contract(CONTRACT_ADDRESSES.institusi, INSTITUSI_ABI, this.signer);
+              const gasEstimate = await institusiContractWithSigner.adminFinalisasiBanding.estimateGas(laporanId, userMenang);
+              const gasLimit = gasEstimate * 120n / 100n; // Add 20% buffer
+              
+              const tx = await institusiContractWithSigner.adminFinalisasiBanding(laporanId, userMenang, {
+                gasLimit
+              });
+              
+              diagnostics.steps.push('✅ Explicit gas limit approach succeeded');
+              return {
+                success: true,
+                txHash: tx.hash,
+                diagnostics
+              };
+              
+            } catch (gasError: any) {
+              console.log('❌ Gas limit approach failed:', gasError.reason || gasError.message);
+              diagnostics.steps.push(`❌ Gas limit approach failed: ${gasError.reason || gasError.message}`);
+            }
+            
+          } catch (contractError: any) {
+            diagnostics.steps.push(`❌ Contract verification failed: ${contractError.message}`);
+          }
+        }
+      }
+      
+      // If all approaches fail, return comprehensive diagnostics
+      const finalError = 'All workaround approaches failed. This indicates a smart contract bug that requires contract updates.';
+      diagnostics.steps.push(`❌ ${finalError}`);
+      
+      return {
+        success: false,
+        error: finalError,
+        diagnostics
+      };
+      
+    } catch (error: any) {
+      const errorMessage = `Workaround failed: ${error.message}`;
+      diagnostics.steps.push(`❌ ${errorMessage}`);
+      
+      return {
+        success: false,
+        error: errorMessage,
+        diagnostics
+      };
+    }
+  }
+
+  // === MISSING METHODS IMPLEMENTATION ===
+
+  // Method to initialize all contracts - comprehensive initialization
+  async initializeContracts(): Promise<void> {
+    console.log('=== INITIALIZING ALL CONTRACTS ===');
+    
+    try {
+      // Initialize User contract
+      await this.initializeUserContract();
+      
+      // Initialize RewardManager contract references
+      await this.fixRewardManagerSetup();
+      
+      console.log('✅ All contracts initialized successfully');
+    } catch (error: any) {
+      console.error('❌ Contract initialization failed:', error);
+      throw new Error(`Contract initialization failed: ${error.message}`);
+    }
+  }
+
+  // Method to fix RewardManager contract setup
+  async fixRewardManagerSetup(): Promise<void> {
+    console.log('=== FIXING REWARD MANAGER SETUP ===');
+    
+    try {
+      const rewardManagerContract = new ethers.Contract(CONTRACT_ADDRESSES.rewardManager, REWARD_MANAGER_ABI, this.signer);
+      
+      // Check if RewardManager has the correct contract references
+      try {
+        // Try to get current contract references if the functions exist
+        let needsSetup = false;
+        
+        try {
+          const institusiAddr = await rewardManagerContract.institusiContract?.();
+          const userAddr = await rewardManagerContract.userContract?.();
+          
+          if (institusiAddr.toLowerCase() !== CONTRACT_ADDRESSES.institusi.toLowerCase() ||
+              userAddr.toLowerCase() !== CONTRACT_ADDRESSES.user.toLowerCase()) {
+            needsSetup = true;
+          }
+        } catch {
+          // Functions might not exist, try to set them anyway
+          needsSetup = true;
+        }
+        
+        if (needsSetup) {
+          console.log('Setting RewardManager contract references...');
+          const tx = await rewardManagerContract.setContracts(
+            CONTRACT_ADDRESSES.institusi,
+            CONTRACT_ADDRESSES.user
+          );
+          
+          console.log('RewardManager setup transaction:', tx.hash);
+          await tx.wait();
+          console.log('✅ RewardManager setup completed successfully');
+        } else {
+          console.log('✅ RewardManager already properly configured');
+        }
+        
+      } catch (error: any) {
+        console.log('⚠️ RewardManager setup attempt failed (may not have setContracts function):', error.message);
+        // This is not critical as some contracts may not have this function
+      }
+      
+    } catch (error: any) {
+      console.error('❌ RewardManager setup failed:', error);
+      throw error;
+    }
+  }
+
+  // Method to get Validasi struct data specifically
+  async getValidasiStructData(laporanId: number): Promise<any> {
+    try {
+      const contract = new ethers.Contract(CONTRACT_ADDRESSES.validator, VALIDATOR_ABI, this.provider);
+      
+      // First try the dedicated getValidasiStructData function if it exists
+      try {
+        const result = await contract.getValidasiStructData(laporanId);
+        console.log('✅ getValidasiStructData result:', result);
+        return {
+          validator: result[0],
+          isValid: result[1],
+          deskripsi: result[2],
+          timestamp: result[3],
+          hasIssues: result[4] || false,
+          dataSource: result[5] || 'getValidasiStructData',
+          rawData: result[6] || JSON.stringify(result)
+        };
+      } catch (structError) {
+        console.log('⚠️ getValidasiStructData function not available, falling back to hasilValidasi');
+        
+        // Fallback to the standard hasilValidasi function
+        const validationResult = await contract.hasilValidasi(laporanId);
+        return {
+          validator: validationResult.validator,
+          isValid: validationResult.isValid,
+          deskripsi: validationResult.deskripsi,
+          timestamp: validationResult.timestamp,
+          hasIssues: false,
+          dataSource: 'hasilValidasi_fallback',
+          rawData: JSON.stringify(validationResult)
+        };
+      }
+    } catch (error: any) {
+      console.error('❌ getValidasiStructData failed:', error);
+      throw new Error(`Failed to get validation struct data: ${error.message}`);
+    }
+  }
+
+  // Validator method for report validation
+  async validasiLaporan(laporanId: number, isValid: boolean, description: string): Promise<ethers.ContractTransactionResponse> {
+    console.log('=== SUBMITTING VALIDATION ===');
+    console.log(`Report ID: ${laporanId}, Is Valid: ${isValid}, Description: ${description}`);
+    
+    try {
+      const contract = new ethers.Contract(CONTRACT_ADDRESSES.validator, VALIDATOR_ABI, this.signer);
+      
+      // Validate inputs
+      if (!laporanId || laporanId <= 0) {
+        throw new Error('Invalid report ID');
+      }
+      
+      if (!description || description.trim() === '') {
+        throw new Error('Validation description cannot be empty');
+      }
+      
+      const cleanDescription = description.trim();
+      
+      // Submit validation
+      const tx = await contract.validasiLaporan(laporanId, isValid, cleanDescription);
+      console.log('Validation transaction submitted:', tx.hash);
+      
+      return tx;
+      
+    } catch (error: any) {
+      console.error('❌ Validation submission failed:', error);
+      throw new Error(`Failed to submit validation: ${error.message}`);
+    }
+  }
+
+  // Method to get stake amount required for appeals  
+  async getStakeBandingAmount(): Promise<string> {
+    try {
+      const contract = new ethers.Contract(CONTRACT_ADDRESSES.user, USER_ABI, this.provider);
+      
+      // Try to get the stake amount from User contract
+      const stakeAmount = await contract.STAKE_BANDING_AMOUNT();
+      return ethers.formatEther(stakeAmount);
+      
+    } catch (error: any) {
+      console.error('❌ Failed to get stake banding amount:', error);
+      
+      // Fallback to a reasonable default if the function doesn't exist
+      console.log('⚠️ Using fallback stake amount');
+      return "10.0"; // 10 RTK as default
+    }
+  }
+
+  // Appeal finalization method - the core function for processing appeal decisions
+  async finalisasiBanding(laporanId: number, userMenang: boolean): Promise<ethers.ContractTransactionResponse> {
+    console.log('=== FINALISASI BANDING ===');
+    console.log(`Report ID: ${laporanId}, User Wins: ${userMenang}`);
+    
+    try {
+      // Basic validation checks
+      const signerAddress = await this.signer.getAddress();
+      console.log(`👤 Admin: ${signerAddress}`);
+      
+      // Get report data
+      const userContract = new ethers.Contract(CONTRACT_ADDRESSES.user, USER_ABI, this.provider);
+      const reportData = await userContract.laporan(laporanId);
+      const institusiId = reportData.institusiId;
+      
+      console.log(`📋 Report ${laporanId} - Institution: ${institusiId}, Status: ${reportData.status}`);
+      
+      // Verify admin authorization
+      const institusiContract = new ethers.Contract(CONTRACT_ADDRESSES.institusi, INSTITUSI_ABI, this.provider);
+      const [nama, admin, treasury] = await institusiContract.getInstitusiData(institusiId);
+      
+      if (signerAddress.toLowerCase() !== admin.toLowerCase()) {
+        throw new Error(`Unauthorized: You are not the admin of institution "${nama}". Admin: ${admin}`);
+      }
+      
+      console.log(`✅ Admin authorization confirmed for institution "${nama}"`);
+      
+      // Check if report is in appeal status
+      const isBandingStatus = await userContract.isBanding(laporanId);
+      if (!isBandingStatus || reportData.status !== 'Banding') {
+        throw new Error(`Report ${laporanId} is not in appeal status. Current status: ${reportData.status}`);
+      }
+      
+      console.log(`✅ Report is in appeal status, proceeding with finalization...`);
+      
+      // Call adminFinalisasiBanding on Institusi contract
+      // This is the correct entry point for admins according to the smart contract design
+
+      const institusiContractWithSigner = new ethers.Contract(CONTRACT_ADDRESSES.institusi, INSTITUSI_ABI, this.signer);
+      
+      console.log(`🚀 Calling adminFinalisasiBanding(${laporanId}, ${userMenang}) on Institusi contract...`);
+      
+      // Execute the transaction
+      return this.executeTransaction(
+        () => institusiContractWithSigner.adminFinalisasiBanding(laporanId, userMenang),
+        'adminFinalisasiBanding'
+      );
+      
+    } catch (error: any) {
+      console.error('Error in finalisasiBanding:', error);
+      
+      // Provide clear error messages
+      if (error.message.includes('Unauthorized')) {
+        throw error; // Re-throw authorization errors as-is
+      } else if (error.message.includes('Hanya admin')) {
+        throw new Error('Smart contract authorization error: The contract rejected your admin credentials. This may be a smart contract bug.');
+      } else if (error.message.includes('not in appeal status')) {
+        throw error; // Re-throw status errors as-is
+      } else if (error.message.includes('missing revert data')) {
+        throw new Error('Function not found: The adminFinalisasiBanding function may not exist in the deployed contract.');
+      } else {
+        throw new Error(`Appeal finalization failed: ${error.message || 'Unknown error'}`);
+      }
+    }
+  }
+
+  // Method to fix User contract setup for appeals
+  async fixUserContractForAppeals(): Promise<void> {
+    console.log('=== FIXING USER CONTRACT FOR APPEALS ===');
+    
+    try {
+      const userContract = new ethers.Contract(CONTRACT_ADDRESSES.user, USER_ABI, this.signer);
+      
+      // Check current contract references
+      console.log('Checking current User contract setup...');
+      const currentInstitusi = await userContract.institusiContract();
+      const currentRewardManager = await userContract.rewardManager();
+      const currentValidator = await userContract.validatorContract();
+      const currentRtkToken = await userContract.rtkToken();
+      
+      console.log('Current User contract references:', {
+        institusi: currentInstitusi,
+        rewardManager: currentRewardManager,
+        validator: currentValidator,
+        rtkToken: currentRtkToken
+      });
+      
+      // Check if references are correct
+      const needsUpdate = 
+        currentInstitusi.toLowerCase() !== CONTRACT_ADDRESSES.institusi.toLowerCase() ||
+        currentRewardManager.toLowerCase() !== CONTRACT_ADDRESSES.rewardManager.toLowerCase() ||
+        currentValidator.toLowerCase() !== CONTRACT_ADDRESSES.validator.toLowerCase() ||
+        currentRtkToken.toLowerCase() !== CONTRACT_ADDRESSES.rtkToken.toLowerCase();
+      
+      if (needsUpdate) {
+        console.log('User contract references need updating...');
+        
+        const tx = await userContract.setContracts(
+          CONTRACT_ADDRESSES.institusi,
+          CONTRACT_ADDRESSES.rewardManager,
+          CONTRACT_ADDRESSES.validator,
+          CONTRACT_ADDRESSES.rtkToken
+        );
+        
+        console.log('User contract update transaction:', tx.hash);
+        await tx.wait();
+        console.log('✅ User contract references updated successfully');
+      } else {
+        console.log('✅ User contract references are already correct');
+      }
+      
+    } catch (error: any) {
+      console.error('Error fixing User contract for appeals:', error);
+      throw error;
     }
   }
 }
